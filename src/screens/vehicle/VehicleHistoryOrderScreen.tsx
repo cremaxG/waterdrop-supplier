@@ -1,0 +1,283 @@
+import React from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
+import { AppIcon, AppText } from '../../components';
+import { VehicleSectionCard } from '../../components/vehicles';
+import { useAppPalette } from '../../hooks/useAppPalette';
+import { useTranslation } from '../../providers/AppProviders';
+import { VehicleHistoryItem, VehicleRecord } from './VehicleDetailsScreen';
+
+interface VehicleHistoryOrderScreenProps {
+  vehicle: VehicleRecord;
+  historyItem: VehicleHistoryItem;
+  onBack: () => void;
+}
+
+export function VehicleHistoryOrderScreen({
+  vehicle,
+  historyItem,
+  onBack,
+}: VehicleHistoryOrderScreenProps) {
+  const { t } = useTranslation();
+  const palette = useAppPalette();
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      <Pressable onPress={onBack} style={styles.backRow}>
+        <AppIcon name="back" size={18} color={palette.accentStrong} />
+        <AppText style={[styles.backText, { color: palette.accentStrong }]}>
+          {t('vehicleHistoryOrderBackButton')}
+        </AppText>
+      </Pressable>
+
+      <View
+        style={[
+          styles.heroCard,
+          {
+            backgroundColor: palette.surface,
+            borderColor: palette.border,
+            shadowColor: palette.shadow,
+          },
+        ]}
+      >
+        <AppText style={[styles.orderId, { color: palette.accentStrong }]}>
+          {historyItem.id}
+        </AppText>
+        <AppText style={[styles.heroTitle, { color: palette.text }]}>
+          {historyItem.route}
+        </AppText>
+        <AppText style={[styles.heroSubtitle, { color: palette.muted }]}>
+          {historyItem.time}
+        </AppText>
+
+        <View style={styles.metricRow}>
+          {[
+            {
+              label: t('vehicleHistoryOrderMetricValue'),
+              value: historyItem.orderValue,
+            },
+            {
+              label: t('vehicleHistoryOrderMetricEarnings'),
+              value: historyItem.earnings,
+            },
+            {
+              label: t('vehicleHistoryOrderMetricUnits'),
+              value: historyItem.deliveredUnits,
+            },
+          ].map(metric => (
+            <View
+              key={metric.label}
+              style={[
+                styles.metricCard,
+                {
+                  backgroundColor: palette.surfaceSoft,
+                  borderColor: palette.border,
+                },
+              ]}
+            >
+              <AppText style={[styles.metricValue, { color: palette.text }]}>
+                {metric.value}
+              </AppText>
+              <AppText style={[styles.metricLabel, { color: palette.muted }]}>
+                {metric.label}
+              </AppText>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <VehicleSectionCard
+        title={t('vehicleHistoryOrderCustomerTitle')}
+        subtitle={t('vehicleHistoryOrderCustomerSubtitle')}
+      >
+        <View style={styles.stack}>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderCustomerLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.customerName}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderAddressLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.stopAddress}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderVehicleLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {vehicle.name}
+            </AppText>
+          </View>
+        </View>
+      </VehicleSectionCard>
+
+      <VehicleSectionCard
+        title={t('vehicleHistoryOrderDeliveryTitle')}
+        subtitle={t('vehicleHistoryOrderDeliverySubtitle')}
+      >
+        <View style={styles.stack}>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderStatusLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.completionStatus}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderDeliveredUnitsLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.deliveredUnits}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderPaymentModeLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.paymentMode}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderOrdersLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.orders}
+            </AppText>
+          </View>
+        </View>
+      </VehicleSectionCard>
+
+      <VehicleSectionCard
+        title={t('vehicleHistoryOrderOpsTitle')}
+        subtitle={t('vehicleHistoryOrderOpsSubtitle')}
+      >
+        <View style={styles.stack}>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderStartReadingLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.startReading}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderEndReadingLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.endReading}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              {t('vehicleHistoryOrderNotesLabel')}
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.notes}
+            </AppText>
+          </View>
+        </View>
+      </VehicleSectionCard>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  contentContainer: {
+    paddingBottom: 32,
+  },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+    gap: 8,
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  heroCard: {
+    borderWidth: 1,
+    borderRadius: 28,
+    padding: 20,
+    marginBottom: 14,
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    elevation: 5,
+  },
+  orderId: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  heroSubtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  metricCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  metricLabel: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  stack: {
+    gap: 12,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  detailLabel: {
+    flex: 1,
+    fontSize: 13,
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+});
