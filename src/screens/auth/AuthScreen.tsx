@@ -10,7 +10,7 @@ import {
   Pressable,
   TextInput,
 } from 'react-native';
-import { StatusBar } from 'react-native';
+import { StatusBar, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, useTranslation } from '../../providers/AppProviders';
 import {
@@ -22,6 +22,8 @@ import {
   AppText,
 } from '../../components';
 import { Country, DEFAULT_COUNTRY } from '../../constants/countries';
+import { getStorage } from '../../utils/Storage';
+import BaseApi from '../../service/baseApi';
 
 const OTP_LENGTH = 6;
 const RESEND_TIMEOUT = 30;
@@ -59,11 +61,31 @@ export function AuthScreen({
     inputBorder: isDark ? '#1E3A4A' : '#C7D2FE',
     heroBadge: isDark ? 'rgba(45, 212, 191, 0.16)' : '#CCFBF1',
     decorTop: isDark ? 'rgba(45, 212, 191, 0.16)' : 'rgba(34, 197, 94, 0.12)',
-    decorBottom: isDark ? 'rgba(56, 189, 248, 0.14)' : 'rgba(14, 165, 233, 0.12)',
+    decorBottom: isDark
+      ? 'rgba(56, 189, 248, 0.14)'
+      : 'rgba(14, 165, 233, 0.12)',
     shadow: isDark ? '#020617' : '#0F172A',
   };
 
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showSupplierRegistration, setShowSupplierRegistration] =
+    useState(false);
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierEmail, setSupplierEmail] = useState('');
+  const [supplierPassword, setSupplierPassword] = useState('');
+  const [supplierGstin, setSupplierGstin] = useState('');
+  const [supplierCin, setSupplierCin] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [supplierState, setSupplierState] = useState('');
+  const [supplierLat, setSupplierLat] = useState('');
+  const [supplierLng, setSupplierLng] = useState('');
+  const [supplierStatus, setSupplierStatus] = useState('pending');
+  const [supplierOnline, setSupplierOnline] = useState(true);
+  const [supplierRatings, setSupplierRatings] = useState('0');
+  const [supplierVerified, setSupplierVerified] = useState(true);
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [signInStep, setSignInStep] = useState<'entry' | 'password' | 'otp'>(
@@ -87,6 +109,17 @@ export function AuthScreen({
   const isOtpFlow = signInStep === 'otp';
   const isLoginDisabled = !isValidPhone || !password.trim();
   const isOtpComplete = otpDigits.every(digit => digit.length === 1);
+  const isRegisterDisabled =
+    !supplierName.trim() ||
+    !supplierEmail.trim() ||
+    !supplierPassword.trim() ||
+    !supplierGstin.trim() ||
+    !supplierCin.trim() ||
+    !addressLine1.trim() ||
+    !city.trim() ||
+    !postalCode.trim() ||
+    !supplierState.trim() ||
+    !isValidPhone;
   const resendLabel =
     resendSeconds > 0
       ? `Resend OTP in 00:${String(resendSeconds).padStart(2, '0')}`
@@ -104,9 +137,38 @@ export function AuthScreen({
     return () => clearTimeout(timer);
   }, [isOtpFlow, resendSeconds]);
 
-  const handleLogin = () => {
-    if (isValidPhone && password.trim()) {
-      onSignIn?.(normalizedPhone, country);
+  const handleLogin = async () => {
+    if (!isValidPhone || !password.trim()) {
+      return;
+    }
+
+    try {
+      const payload = {
+        phone: normalizedPhone,
+        password: password.trim(),
+      };
+
+      const response = await BaseApi.post(
+        '/auth/suppliers/login',
+        payload,
+        {},
+        {},
+        '',
+      );
+
+      if (response && response.token) {
+        // Store the token
+        getStorage().set('authToken', response.token);
+        // Call onSignIn
+        onSignIn?.(normalizedPhone, country);
+      } else {
+        Alert.alert('Login failed', 'Invalid credentials');
+      }
+    } catch (error: any) {
+      Alert.alert(
+        'Login failed',
+        error?.message || 'Unable to login. Please try again.',
+      );
     }
   };
 
@@ -120,16 +182,28 @@ export function AuthScreen({
     setResendSeconds(0);
   };
 
-  const handleSendCode = () => {
+  const handleSendCode = async () => {
     if (!isValidPhone) {
       return;
     }
 
-    console.log(`Sending OTP to ${country.dialCode}${normalizedPhone}`);
-    setSignInStep('otp');
-    setPassword('');
-    setOtpDigits(createEmptyOtp());
-    setResendSeconds(RESEND_TIMEOUT);
+    try {
+      const payload = {
+        phone: normalizedPhone,
+      };
+
+      await BaseApi.post('/auth/suppliers/request-otp', payload, {}, {}, '');
+
+      setSignInStep('otp');
+      setPassword('');
+      setOtpDigits(createEmptyOtp());
+      setResendSeconds(RESEND_TIMEOUT);
+    } catch (error: any) {
+      Alert.alert(
+        'Failed to send OTP',
+        error?.message || 'Unable to send OTP. Please try again.',
+      );
+    }
   };
 
   const handleChangeNumber = () => {
@@ -154,9 +228,12 @@ export function AuthScreen({
     setOtpDigits(current => {
       const next = [...current];
 
-      digits.slice(0, OTP_LENGTH - index).split('').forEach((digit, offset) => {
-        next[index + offset] = digit;
-      });
+      digits
+        .slice(0, OTP_LENGTH - index)
+        .split('')
+        .forEach((digit, offset) => {
+          next[index + offset] = digit;
+        });
 
       return next;
     });
@@ -171,22 +248,63 @@ export function AuthScreen({
     }
   };
 
-  const handleVerifyOtp = () => {
-    if (isValidPhone && isOtpComplete) {
-      console.log(`Verifying OTP for ${country.dialCode}${normalizedPhone}`);
-      onSignIn?.(normalizedPhone, country);
+  const handleVerifyOtp = async () => {
+    if (!isValidPhone || !isOtpComplete) {
+      return;
+    }
+
+    try {
+      const otp = otpDigits.join('');
+      const payload = {
+        phone: normalizedPhone,
+        otp: otp,
+      };
+
+      const response = await BaseApi.post(
+        '/auth/suppliers/login-otp',
+        payload,
+        {},
+        {},
+        '',
+      );
+
+      if (response && response.token) {
+        // Store the token
+        getStorage().set('authToken', response.token);
+        // Call onSignIn
+        onSignIn?.(normalizedPhone, country);
+      } else {
+        Alert.alert('Verification failed', 'Invalid OTP');
+      }
+    } catch (error: any) {
+      Alert.alert(
+        'Verification failed',
+        error?.message || 'Unable to verify OTP. Please try again.',
+      );
     }
   };
 
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
     if (resendSeconds > 0 || !isValidPhone) {
       return;
     }
 
-    console.log(`Resending OTP to ${country.dialCode}${normalizedPhone}`);
-    setOtpDigits(createEmptyOtp());
-    setResendSeconds(RESEND_TIMEOUT);
-    otpInputRefs.current[0]?.focus();
+    try {
+      const payload = {
+        phone: normalizedPhone,
+      };
+
+      await BaseApi.post('/auth/suppliers/request-otp', payload, {}, {}, '');
+
+      setOtpDigits(createEmptyOtp());
+      setResendSeconds(RESEND_TIMEOUT);
+      otpInputRefs.current[0]?.focus();
+    } catch (error: any) {
+      Alert.alert(
+        'Failed to resend OTP',
+        error?.message || 'Unable to resend OTP. Please try again.',
+      );
+    }
   };
 
   const handleForgotPassword = () => {
@@ -196,6 +314,72 @@ export function AuthScreen({
       );
       setShowForgotPassword(false);
       setForgotPhone('');
+    }
+  };
+
+  const handleRegisterSupplier = async () => {
+    if (isRegisterDisabled) {
+      return;
+    }
+
+    try {
+      const payload = {
+        name: supplierName.trim(),
+        phone: normalizedPhone,
+        email: supplierEmail.trim(),
+        password: supplierPassword,
+        gstin: supplierGstin.trim(),
+        cin: supplierCin.trim(),
+        address_line_1: addressLine1.trim(),
+        address_line_2: addressLine2.trim(),
+        city: city.trim(),
+        postal_code: postalCode.trim(),
+        state: supplierState.trim(),
+        country: country.name,
+        lat: supplierLat.trim(),
+        lng: supplierLng.trim(),
+        status: supplierStatus,
+        online: supplierOnline,
+        ratings: supplierRatings,
+        verified: supplierVerified,
+      };
+
+      const response = await BaseApi.post(
+        '/auth/suppliers/register',
+        payload,
+        {},
+        {},
+        '',
+      );
+
+      setShowSupplierRegistration(false);
+      setSupplierName('');
+      setSupplierEmail('');
+      setSupplierPassword('');
+      setSupplierGstin('');
+      setSupplierCin('');
+      setAddressLine1('');
+      setAddressLine2('');
+      setCity('');
+      setPostalCode('');
+      setSupplierState('');
+      setSupplierLat('');
+      setSupplierLng('');
+      setSupplierStatus('pending');
+      setSupplierOnline(true);
+      setSupplierRatings('0');
+      setSupplierVerified(true);
+
+      Alert.alert(
+        'Success',
+        response.message ||
+          'Your supplier account request has been submitted. Please sign in once it is approved.',
+      );
+    } catch (error: any) {
+      Alert.alert(
+        'Registration failed',
+        error?.message || 'Unable to register supplier.',
+      );
     }
   };
 
@@ -493,6 +677,21 @@ export function AuthScreen({
                 style={[styles.termsText, { color: palette.subtleText }]}
                 i18nKey="termsAndConditions"
               />
+              <View style={styles.supplierActionContainer}>
+                <AppButton
+                  i18nKey="becomeSupplierButton"
+                  onPress={() => setShowSupplierRegistration(true)}
+                  style={[
+                    styles.button,
+                    styles.fullWidthButton,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                  textStyle={{ color: palette.accentStrong }}
+                />
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -503,7 +702,10 @@ export function AuthScreen({
         <SafeAreaView
           style={[
             styles.safeArea,
-            { backgroundColor: palette.screenBackground, paddingTop: insets.top },
+            {
+              backgroundColor: palette.screenBackground,
+              paddingTop: insets.top,
+            },
           ]}
         >
           <StatusBar barStyle={theme.statusBarStyle} />
@@ -600,6 +802,220 @@ export function AuthScreen({
                 <AppButton
                   i18nKey="backToLogin"
                   onPress={() => setShowForgotPassword(false)}
+                  style={[
+                    styles.button,
+                    styles.secondaryButton,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                  textStyle={{ color: palette.accentStrong }}
+                />
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={showSupplierRegistration}
+        animationType="slide"
+        transparent
+      >
+        <SafeAreaView
+          style={[
+            styles.safeArea,
+            {
+              backgroundColor: palette.screenBackground,
+              paddingTop: insets.top,
+            },
+          ]}
+        >
+          <StatusBar barStyle={theme.statusBarStyle} />
+          <ScrollView
+            contentContainerStyle={[
+              styles.container,
+              { backgroundColor: palette.screenBackground },
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.headerSection}>
+              <View
+                style={[
+                  styles.iconBadge,
+                  {
+                    backgroundColor: palette.heroBadge,
+                    borderColor: palette.accentSoftBorder,
+                  },
+                ]}
+              >
+                <AppIcon
+                  name="water"
+                  size={54}
+                  color={palette.accentStrong}
+                  style={styles.icon}
+                />
+              </View>
+              <AppText
+                i18nKey="supplierRegistrationTitle"
+                style={[styles.title, { color: palette.heading }]}
+              />
+              <AppText
+                i18nKey="supplierRegistrationSubtitle"
+                style={[styles.subtitle, { color: palette.subtleText }]}
+              />
+            </View>
+
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: palette.surface,
+                  borderColor: palette.surfaceBorder,
+                  shadowColor: palette.shadow,
+                },
+              ]}
+            >
+              <AppInput
+                placeholderKey="supplierNamePlaceholder"
+                value={supplierName}
+                onChangeText={setSupplierName}
+                style={styles.input}
+              />
+              <View style={styles.phoneInputContainer}>
+                <AppCountryPicker
+                  selectedCountry={country}
+                  onCountrySelect={setCountry}
+                />
+                <View style={styles.inputWrapper}>
+                  <AppText
+                    style={[styles.dialCode, { color: palette.accentStrong }]}
+                  >
+                    {country.dialCode}
+                  </AppText>
+                  <AppInput
+                    placeholderKey="mobileNumberPlaceholder"
+                    value={phone}
+                    onChangeText={value => setPhone(value.replace(/\D/g, ''))}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    style={[
+                      styles.phoneInput,
+                      {
+                        backgroundColor: palette.inputBackground,
+                        borderColor: palette.inputBorder,
+                        color: palette.heading,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+              <AppInput
+                placeholderKey="emailPlaceholder"
+                value={supplierEmail}
+                onChangeText={setSupplierEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="passwordPlaceholder"
+                value={supplierPassword}
+                onChangeText={setSupplierPassword}
+                secureTextEntry
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="gstinPlaceholder"
+                value={supplierGstin}
+                onChangeText={setSupplierGstin}
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="cinPlaceholder"
+                value={supplierCin}
+                onChangeText={setSupplierCin}
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="addressLine1Placeholder"
+                value={addressLine1}
+                onChangeText={setAddressLine1}
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="addressLine2Placeholder"
+                value={addressLine2}
+                onChangeText={setAddressLine2}
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="cityPlaceholder"
+                value={city}
+                onChangeText={setCity}
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="postalCodePlaceholder"
+                value={postalCode}
+                onChangeText={setPostalCode}
+                keyboardType="number-pad"
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="statePlaceholder"
+                value={supplierState}
+                onChangeText={setSupplierState}
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="latitudePlaceholder"
+                value={supplierLat}
+                onChangeText={setSupplierLat}
+                keyboardType="decimal-pad"
+                style={styles.input}
+              />
+              <AppInput
+                placeholderKey="longitudePlaceholder"
+                value={supplierLng}
+                onChangeText={setSupplierLng}
+                keyboardType="decimal-pad"
+                style={styles.input}
+              />
+              <View style={styles.checkboxGroup}>
+                <AppCheckbox
+                  label={t('supplierOnlineLabel')}
+                  checked={supplierOnline}
+                  onChange={setSupplierOnline}
+                />
+                <AppCheckbox
+                  label={t('supplierVerifiedLabel')}
+                  checked={supplierVerified}
+                  onChange={setSupplierVerified}
+                  style={{ marginTop: 12 }}
+                />
+              </View>
+
+              <View style={styles.buttonGroup}>
+                <AppButton
+                  i18nKey="signUpButton"
+                  onPress={handleRegisterSupplier}
+                  disabled={isRegisterDisabled}
+                  style={[
+                    styles.button,
+                    styles.fullWidthButton,
+                    {
+                      backgroundColor: palette.accent,
+                      borderColor: palette.accent,
+                      shadowColor: palette.accentStrong,
+                    },
+                  ]}
+                  textStyle={{ color: palette.accentTextOnFill }}
+                />
+                <AppButton
+                  i18nKey="backToLogin"
+                  onPress={() => setShowSupplierRegistration(false)}
                   style={[
                     styles.button,
                     styles.secondaryButton,
@@ -767,7 +1183,7 @@ const styles = StyleSheet.create({
   buttonGroup: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 12,
+    marginVertical: 12,
   },
   button: {
     flex: 1,
@@ -795,6 +1211,12 @@ const styles = StyleSheet.create({
   forgotPasswordContainer: {
     alignItems: 'flex-end',
     marginBottom: 16,
+  },
+  supplierActionContainer: {
+    marginTop: 16,
+  },
+  checkboxGroup: {
+    marginTop: 16,
   },
   termsText: {
     fontSize: 12,

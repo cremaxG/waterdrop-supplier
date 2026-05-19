@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { AppButton, AppText } from '../../components';
 import {
@@ -10,6 +10,30 @@ import {
 } from '../../components/profile';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
+import BaseApi from '../../service/baseApi';
+
+interface SupplierProfile {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  gstin: string;
+  cin: string;
+  address_line_1: string;
+  address_line_2: string;
+  city: string;
+  postal_code: string;
+  state: string;
+  country: string;
+  lat: string;
+  lng: string;
+  status: string;
+  online: boolean;
+  ratings: string;
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 interface ProfileScreenProps {
   currentThemeLabel: string;
@@ -45,10 +69,98 @@ export function ProfileScreen({
   const { t } = useTranslation();
   const palette = useAppPalette();
 
+  const [profile, setProfile] = useState<SupplierProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await BaseApi.get('/suppliers/profile');
+        setProfile(response);
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
   const openSupportCall = () => {
-    const supportNumber = t('profilePhoneValue').replace(/\s+/g, '');
-    Linking.openURL(`tel:${supportNumber}`);
+    const supportNumber = profile?.phone || t('profilePhoneValue');
+    const cleanedNumber = supportNumber.replace(/\s+/g, '');
+    Linking.openURL(`tel:${cleanedNumber}`);
   };
+
+  const retryFetchProfile = () => {
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await BaseApi.get('/suppliers/profile');
+        setProfile(response);
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: palette.background },
+        ]}
+      >
+        <AppText style={[styles.loadingText, { color: palette.text }]}>
+          Loading profile...
+        </AppText>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View
+        style={[styles.errorContainer, { backgroundColor: palette.background }]}
+      >
+        <AppText style={[styles.errorText, { color: palette.text }]}>
+          {error}
+        </AppText>
+        <AppButton
+          title="Retry"
+          onPress={retryFetchProfile}
+          style={styles.retryButton}
+        />
+      </View>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <View
+        style={[styles.errorContainer, { backgroundColor: palette.background }]}
+      >
+        <AppText style={[styles.errorText, { color: palette.text }]}>
+          No profile data available
+        </AppText>
+        <AppButton
+          title="Retry"
+          onPress={retryFetchProfile}
+          style={styles.retryButton}
+        />
+      </View>
+    );
+  }
 
   return (
     <>
@@ -60,13 +172,21 @@ export function ProfileScreen({
       </AppText>
 
       <ProfileHeroCard
-        title={t('profileBusinessName')}
+        title={profile.name}
         subtitle={t('profileBusinessType')}
-        status={t('profileOnlineLabel')}
-        badgePrimary={t('profileVerifiedBadge')}
-        badgeSecondary={`${t('profileSinceLabel')}: ${t('profileSinceValue')}`}
+        status={
+          profile.online ? t('profileOnlineLabel') : t('profileOfflineLabel')
+        }
+        badgePrimary={profile.verified ? t('profileVerifiedBadge') : ''}
+        badgeSecondary={`${t('profileSinceLabel')}: ${new Date(
+          profile.created_at,
+        ).getFullYear()}`}
         metrics={[
-          { icon: 'star', label: t('profileRatingLabel'), value: '4.8/5' },
+          {
+            icon: 'star',
+            label: t('profileRatingLabel'),
+            value: `${profile.ratings}/5`,
+          },
           { icon: 'shield', label: t('profileCompletionLabel'), value: '97%' },
           { icon: 'clock', label: t('profileResponseLabel'), value: '3 min' },
         ]}
@@ -80,12 +200,12 @@ export function ProfileScreen({
           <ProfileDetailRow
             icon="phone"
             label={t('profilePhoneLabel')}
-            value={t('profilePhoneValue')}
+            value={profile.phone}
           />
           <ProfileDetailRow
             icon="location"
             label={t('profileCoverageLabel')}
-            value={t('profileCoverageValue')}
+            value={`${profile.city}, ${profile.state}, ${profile.country}`}
           />
           <ProfileDetailRow
             icon="clock"
@@ -246,5 +366,28 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     color: '#FFFFFF',
     fontWeight: '800',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
   },
 });
