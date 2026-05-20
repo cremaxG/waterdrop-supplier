@@ -30,6 +30,7 @@ const iconMap: Record<string, string> = {
   wallet: '◉',
   building: '▦',
   mail: '✉',
+  email: '✉',
   logout: '⇥',
   back: '‹',
   map: '⌖',

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   Pressable,
@@ -7,10 +8,12 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { AppButton, AppIcon, AppText } from '../../components';
+import { AppButton, AppIcon, AppRefreshScrollView, AppText } from '../../components';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
 import { useOperations } from '../../providers/OperationsProvider';
+import SupplierApi from '../../service/supplierApi';
+import ProductApi from '../../service/productApi';
 import { AddProductScreen, NewProductDraft } from './AddProductScreen';
 import {
   ProductDetailsScreen,
@@ -21,6 +24,50 @@ interface ProductsScreenProps {
   onDetailVisibilityChange?: (isVisible: boolean) => void;
 }
 
+function unwrapApiData<T>(response: T | { data?: T } | null | undefined): T | null {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data?: T }).data ?? null;
+  }
+  return (response as T) ?? null;
+}
+
+function unwrapSupplierProfile(response: any) {
+  const unwrapped = unwrapApiData<any>(response);
+  return unwrapped?.supplier ?? unwrapped?.profile ?? unwrapped;
+}
+
+function unwrapCreatedProduct(response: any) {
+  const unwrapped = unwrapApiData<any>(response);
+  return unwrapped?.product ?? unwrapped;
+}
+
+function extractApiErrorMessage(response: any) {
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  return (
+    response.message ??
+    response.error ??
+    response.errors?.[0]?.message ??
+    response.data?.message ??
+    null
+  );
+}
+
+function getProductVehicleUnits(product: ProductRecord) {
+  const explicitVehicleUnits = product.vehicleInventory.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
+
+  if (explicitVehicleUnits > 0) {
+    return explicitVehicleUnits;
+  }
+
+  return Math.max(product.totalStock - product.godownInventory, 0);
+}
+
 export function ProductsScreen({
   onDetailVisibilityChange,
 }: ProductsScreenProps) {
@@ -29,6 +76,7 @@ export function ProductsScreen({
   const {
     products,
     addProduct,
+    refreshProducts,
     updateProductGodownInventory,
     updateProductVehicleInventory,
   } = useOperations();
@@ -42,6 +90,27 @@ export function ProductsScreen({
     () => products.find(product => product.id === selectedProductId) ?? null,
     [products, selectedProductId],
   );
+
+  const productSummary = useMemo(() => {
+    const lowStockCount = products.filter(
+      product => product.totalStock <= product.reorderLevel,
+    ).length;
+    const godownUnits = products.reduce(
+      (total, product) => total + product.godownInventory,
+      0,
+    );
+    const vehicleUnits = products.reduce(
+      (total, product) => total + getProductVehicleUnits(product),
+      0,
+    );
+
+    return {
+      totalProducts: products.length,
+      lowStockCount,
+      godownUnits,
+      vehicleUnits,
+    };
+  }, [products]);
 
   useEffect(() => {
     if (!selectedProductId) {
@@ -115,25 +184,67 @@ export function ProductsScreen({
     });
   };
 
-  const handleAddProduct = (draft: NewProductDraft) => {
-    const godownInventory = Number(draft.godownInventory) || 0;
-    const newProduct: ProductRecord = {
-      id: `product-${Date.now()}`,
-      name: draft.name.trim(),
-      sku: draft.sku.trim(),
-      category: draft.category.trim(),
-      unitLabel: draft.unitLabel.trim(),
-      totalStock: godownInventory,
-      godownInventory,
-      demand: draft.demand.trim(),
-      trendKey: 'productTrendSteady',
-      reorderLevel: Number(draft.reorderLevel) || 0,
-      description: draft.description.trim(),
-      vehicleInventory: [],
-    };
+  const handleAddProduct = async (draft: NewProductDraft) => {
+    try {
+      const supplierResponse = await SupplierApi.getSupplierProfile();
+      const supplier = unwrapSupplierProfile(supplierResponse) as { id?: number } | null;
 
-    addProduct(newProduct);
-    closeAddProduct();
+      if (!supplier?.id) {
+        throw new Error('Unable to load supplier profile.');
+      }
+
+      const payload = {
+        supplier_id: supplier.id,
+        name: draft.name.trim(),
+        price: draft.price.trim(),
+        uom: draft.unitLabel.trim(),
+        stock_qty: Number(draft.godownInventory) || 0,
+        category: draft.category.trim(),
+        type: draft.type.trim(),
+        description: draft.description.trim(),
+      };
+
+      const createProductResponse = await ProductApi.createProduct(payload);
+      const response = unwrapCreatedProduct(createProductResponse);
+
+      if (!response || (!response.id && !response.name)) {
+        throw new Error(
+          extractApiErrorMessage(createProductResponse) ??
+            'Unable to create product. Please try again.',
+        );
+      }
+
+      const productId = String(response.id ?? `product-${Date.now()}`);
+      const nextProduct: ProductRecord = {
+        id: productId,
+        name: response.name ?? draft.name.trim(),
+        sku: draft.sku.trim(),
+        category: response.category ?? draft.category.trim(),
+        unitLabel: response.uom ?? draft.unitLabel.trim(),
+        totalStock: Number(response.stock_qty ?? draft.godownInventory) || 0,
+        godownInventory: Number(response.stock_qty ?? draft.godownInventory) || 0,
+        demand: draft.demand.trim(),
+        trendKey: 'productTrendSteady',
+        reorderLevel: Number(draft.reorderLevel) || 0,
+        description: response.description ?? draft.description.trim(),
+        vehicleInventory: [],
+      };
+
+      try {
+        await refreshProducts();
+      } catch (refreshError) {
+        console.warn('Unable to refresh products after creation', refreshError);
+        addProduct(nextProduct);
+      }
+
+      closeAddProduct();
+    } catch (error: any) {
+      console.error('Create product failed', error);
+      Alert.alert(
+        'Failed to create product',
+        error?.message || 'Unable to create product. Please try again.',
+      );
+    }
   };
 
   const updateGodownInventory = (nextQuantity: number) => {
@@ -152,100 +263,226 @@ export function ProductsScreen({
 
   return (
     <View style={styles.screenRoot}>
-      <View style={styles.listScreen}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerCopy}>
-            <AppText style={[styles.sectionTitle, { color: palette.text }]}>
-              {t('productsHeading')}
-            </AppText>
-            <AppText style={[styles.sectionSubtitle, { color: palette.muted }]}>
-              {t('productsSubtitle')}
-            </AppText>
+      <AppRefreshScrollView
+        refreshEnabled={!selectedProductId && !isAddProductVisible}
+        onRefresh={refreshProducts}
+      >
+        <View style={styles.listScreen}>
+        <View
+          style={[
+            styles.heroCard,
+            {
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+              shadowColor: palette.shadow,
+            },
+          ]}
+        >
+          <View pointerEvents="none" style={styles.heroDecor}>
+            <View
+              style={[
+                styles.heroBubble,
+                styles.heroBubbleTop,
+                { backgroundColor: palette.heroTop },
+              ]}
+            />
+            <View
+              style={[
+                styles.heroBubble,
+                styles.heroBubbleBottom,
+                { backgroundColor: palette.heroBottom },
+              ]}
+            />
           </View>
-          <AppButton
-            title={t('productAddButton')}
-            onPress={openAddProduct}
-            style={styles.addButton}
-            textStyle={styles.addButtonText}
-          />
-        </View>
 
-        {products.map(product => (
-          <Pressable
-            key={product.id}
-            onPress={() => openProductDetails(product.id)}
-            style={[
-              styles.listCard,
-              {
-                backgroundColor: palette.surface,
-                borderColor: palette.border,
-                shadowColor: palette.shadow,
-              },
-            ]}
-          >
-            <View style={styles.listCardHeader}>
-              <View>
-                <AppText style={[styles.listCardTitle, { color: palette.text }]}>
-                  {product.name}
-                </AppText>
-                <AppText
-                  style={[styles.listCardStatus, { color: palette.accentStrong }]}
-                >
-                  {t(product.trendKey)}
-                </AppText>
-              </View>
+          <View style={styles.headerRow}>
+            <View style={styles.headerCopy}>
               <View
                 style={[
-                  styles.iconBadgeSmall,
+                  styles.heroBadge,
                   {
                     backgroundColor: palette.accentSoft,
                     borderColor: palette.accentSoftBorder,
                   },
                 ]}
               >
-                <AppIcon name="package" size={18} color={palette.accentStrong} />
+                <AppIcon name="products" size={18} color={palette.accentStrong} />
+                <AppText style={[styles.heroBadgeText, { color: palette.accentStrong }]}>
+                  {t('productsTab')}
+                </AppText>
               </View>
+              <AppText style={[styles.sectionTitle, { color: palette.text }]}>
+                {t('productsHeading')}
+              </AppText>
+              <AppText style={[styles.sectionSubtitle, { color: palette.muted }]}>
+                {t('productsSubtitle')}
+              </AppText>
             </View>
+            <AppButton
+              title={t('productAddButton')}
+              onPress={openAddProduct}
+              variant="primary"
+              style={styles.addButton}
+              textStyle={styles.addButtonText}
+            />
+          </View>
 
-            <View style={styles.metaRow}>
-              <View style={styles.metaBlock}>
-                <AppText style={[styles.metaLabel, { color: palette.muted }]}>
-                  {t('productStockLabel')}
+          <View style={styles.summaryRow}>
+            {[
+              {
+                label: t('productsTab'),
+                value: String(productSummary.totalProducts),
+              },
+              {
+                label: t('dashboardLowStockTitle'),
+                value: String(productSummary.lowStockCount),
+              },
+              {
+                label: t('dashboardGodownLabel'),
+                value: String(productSummary.godownUnits),
+              },
+            ].map(item => (
+              <View
+                key={item.label}
+                style={[
+                  styles.summaryCard,
+                  {
+                    backgroundColor: palette.surfaceSoft,
+                    borderColor: palette.border,
+                  },
+                ]}
+              >
+                <AppText style={[styles.summaryValue, { color: palette.text }]}>
+                  {item.value}
                 </AppText>
-                <AppText style={[styles.metaValue, { color: palette.text }]}>
-                  {product.totalStock}
+                <AppText style={[styles.summaryLabel, { color: palette.muted }]}>
+                  {item.label}
                 </AppText>
               </View>
-              <View style={styles.metaBlock}>
-                <AppText style={[styles.metaLabel, { color: palette.muted }]}>
-                  {t('productDemandLabel')}
-                </AppText>
-                <AppText style={[styles.metaValue, { color: palette.text }]}>
-                  {product.demand}
-                </AppText>
-              </View>
-            </View>
+            ))}
+          </View>
 
-            <View
+          <View
+            style={[
+              styles.loadCard,
+              {
+                backgroundColor: palette.surfaceSoft,
+                borderColor: palette.border,
+              },
+            ]}
+          >
+            <AppText style={[styles.loadCardLabel, { color: palette.muted }]}>
+              {t('dashboardVehicleLoadLabel')}
+            </AppText>
+            <AppText style={[styles.loadCardValue, { color: palette.text }]}>
+              {productSummary.vehicleUnits}
+            </AppText>
+          </View>
+        </View>
+
+        {products.length === 0 ? (
+          <View
+            style={[
+              styles.emptyStateCard,
+              {
+                backgroundColor: palette.surface,
+                borderColor: palette.border,
+              },
+            ]}
+          >
+            <AppText style={[styles.emptyStateTitle, { color: palette.text }]}>
+              {t('productsHeading')}
+            </AppText>
+            <AppText style={[styles.emptyStateBody, { color: palette.muted }]}>
+              {t('productsSubtitle')}
+            </AppText>
+            <AppButton
+              title={t('productAddButton')}
+              onPress={openAddProduct}
+              variant="primary"
+              style={styles.emptyStateButton}
+              textStyle={styles.addButtonText}
+            />
+          </View>
+        ) : (
+          products.map(product => (
+            <Pressable
+              key={product.id}
+              onPress={() => openProductDetails(product.id)}
               style={[
-                styles.inventoryStrip,
+                styles.listCard,
                 {
-                  backgroundColor: palette.surfaceSoft,
+                  backgroundColor: palette.surface,
                   borderColor: palette.border,
+                  shadowColor: palette.shadow,
                 },
               ]}
             >
-              <AppText style={[styles.inventoryStripLabel, { color: palette.muted }]}>
-                {t('productGodownShortLabel')}
-              </AppText>
-              <AppText style={[styles.inventoryStripValue, { color: palette.text }]}>
-                {product.godownInventory} {product.unitLabel}
-              </AppText>
-              <AppIcon name="chevron" size={18} color={palette.accentStrong} />
-            </View>
-          </Pressable>
-        ))}
-      </View>
+              <View style={styles.listCardHeader}>
+                <View>
+                  <AppText style={[styles.listCardTitle, { color: palette.text }]}>
+                    {product.name}
+                  </AppText>
+                  <AppText
+                    style={[styles.listCardStatus, { color: palette.accentStrong }]}
+                  >
+                    {t(product.trendKey)}
+                  </AppText>
+                </View>
+                <View
+                  style={[
+                    styles.iconBadgeSmall,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                >
+                  <AppIcon name="package" size={18} color={palette.accentStrong} />
+                </View>
+              </View>
+
+              <View style={styles.metaRow}>
+                <View style={styles.metaBlock}>
+                  <AppText style={[styles.metaLabel, { color: palette.muted }]}>
+                    {t('productStockLabel')}
+                  </AppText>
+                  <AppText style={[styles.metaValue, { color: palette.text }]}>
+                    {product.totalStock}
+                  </AppText>
+                </View>
+                <View style={styles.metaBlock}>
+                  <AppText style={[styles.metaLabel, { color: palette.muted }]}>
+                    {t('productDemandLabel')}
+                  </AppText>
+                  <AppText style={[styles.metaValue, { color: palette.text }]}>
+                    {product.demand}
+                  </AppText>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.inventoryStrip,
+                  {
+                    backgroundColor: palette.surfaceSoft,
+                    borderColor: palette.border,
+                  },
+                ]}
+              >
+                <AppText style={[styles.inventoryStripLabel, { color: palette.muted }]}>
+                  {t('productGodownShortLabel')}
+                </AppText>
+                <AppText style={[styles.inventoryStripValue, { color: palette.text }]}>
+                  {product.godownInventory} {product.unitLabel}
+                </AppText>
+                <AppIcon name="chevron" size={18} color={palette.accentStrong} />
+              </View>
+            </Pressable>
+          ))
+        )}
+        </View>
+      </AppRefreshScrollView>
 
       {selectedProduct ? (
         <Animated.View
@@ -294,6 +531,43 @@ const styles = StyleSheet.create({
   listScreen: {
     flex: 1,
   },
+  heroCard: {
+    borderWidth: 1,
+    borderRadius: 28,
+    padding: 22,
+    marginBottom: 18,
+    overflow: 'hidden',
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    shadowOffset: {
+      width: 0,
+      height: 14,
+    },
+    elevation: 8,
+  },
+  heroDecor: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  heroBubble: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  heroBubbleTop: {
+    width: 180,
+    height: 180,
+    top: -70,
+    right: -30,
+  },
+  heroBubbleBottom: {
+    width: 150,
+    height: 150,
+    bottom: -50,
+    left: -20,
+  },
   overlayScreen: {
     ...StyleSheet.absoluteFill,
   },
@@ -307,6 +581,21 @@ const styles = StyleSheet.create({
   headerCopy: {
     flex: 1,
   },
+  heroBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  heroBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
   sectionTitle: {
     fontSize: 28,
     fontWeight: '800',
@@ -317,15 +606,48 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   addButton: {
-    backgroundColor: '#0284C7',
-    borderColor: '#0284C7',
     borderRadius: 18,
     paddingHorizontal: 14,
-    paddingVertical: 12,
   },
   addButtonText: {
-    color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '800',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+  },
+  summaryCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  loadCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  loadCardLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loadCardValue: {
+    fontSize: 20,
     fontWeight: '800',
   },
   listCard: {
@@ -395,5 +717,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '700',
+  },
+  emptyStateCard: {
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 18,
+    gap: 14,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  emptyStateBody: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  emptyStateButton: {
+    alignSelf: 'flex-start',
   },
 });

@@ -14,7 +14,9 @@ export interface NewProductDraft {
   name: string;
   sku: string;
   category: string;
+  type: string;
   unitLabel: string;
+  price: string;
   godownInventory: string;
   demand: string;
   reorderLevel: string;
@@ -36,7 +38,9 @@ export function AddProductScreen({
     name: '',
     sku: '',
     category: '',
+    type: '',
     unitLabel: '',
+    price: '',
     godownInventory: '',
     demand: '',
     reorderLevel: '',
@@ -45,9 +49,7 @@ export function AddProductScreen({
 
   const isValid = useMemo(
     () =>
-      Object.values(draft).every(value => value.trim().length > 0) &&
-      Number(draft.godownInventory) >= 0 &&
-      Number(draft.reorderLevel) >= 0,
+      Object.values(draft).every(value => value.trim().length > 0),
     [draft],
   );
 
@@ -104,6 +106,17 @@ export function AddProductScreen({
             value={draft.category}
             onChangeText={value => updateField('category', value)}
             placeholder={t('productAddCategoryPlaceholder')}
+          />
+          <AppInput
+            value={draft.type}
+            onChangeText={value => updateField('type', value)}
+            placeholder={t('productAddTypePlaceholder')}
+          />
+          <AppInput
+            value={draft.price}
+            onChangeText={value => updateField('price', value)}
+            placeholder={t('productAddPricePlaceholder')}
+            keyboardType="decimal-pad"
           />
           <AppInput
             value={draft.unitLabel}

@@ -25,12 +25,16 @@ export default class BaseApi {
 
   static getHeaders(extraHeaders = {}, tokenOverride?: string) {
     const token = tokenOverride ?? getStorage().getString('authToken');
-
-    return {
-      Authorization: `Bearer ${token}`,
+    const headers: any = {
       "Content-Type": "application/json",
       ...extraHeaders,
     };
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
   }
 
   static camelToSnake(str: string) {

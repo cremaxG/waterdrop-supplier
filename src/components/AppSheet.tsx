@@ -47,6 +47,14 @@ export function AppSheet({
             },
           ]}
         >
+          <View
+            style={[
+              styles.handle,
+              {
+                backgroundColor: palette.border,
+              },
+            ]}
+          />
           <Pressable
             onPress={onClose}
             style={[
@@ -90,8 +98,15 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderWidth: 1,
-    paddingTop: 28,
+    paddingTop: 18,
     paddingHorizontal: 20,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 54,
+    height: 6,
+    borderRadius: 999,
+    marginBottom: 18,
   },
   closeButton: {
     position: 'absolute',

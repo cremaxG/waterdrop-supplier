@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
-import { AppButton, AppText } from '../../components';
+import { AppButton, AppIcon, AppRefreshScrollView, AppText } from '../../components';
 import {
   ProfileActionRow,
   ProfileCard,
@@ -10,7 +10,7 @@ import {
 } from '../../components/profile';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
-import BaseApi from '../../service/baseApi';
+import SupplierApi from '../../service/supplierApi';
 
 interface SupplierProfile {
   id: number;
@@ -51,6 +51,14 @@ interface ProfileScreenProps {
   onRequestLogout: () => void;
 }
 
+function unwrapApiData<T>(response: T | { data?: T } | null | undefined): T | null {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data?: T }).data ?? null;
+  }
+
+  return (response as T) ?? null;
+}
+
 export function ProfileScreen({
   currentThemeLabel,
   currentLanguageLabel,
@@ -73,22 +81,26 @@ export function ProfileScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await BaseApi.get('/suppliers/profile');
-        setProfile(response);
-      } catch (err: any) {
-        setError(err?.message || 'Failed to load profile');
-      } finally {
-        setLoading(false);
+  const loadProfile = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await SupplierApi.getSupplierProfile();
+      const nextProfile = unwrapApiData<SupplierProfile>(response);
+      setProfile(nextProfile);
+      if (!nextProfile) {
+        setError('No profile data available');
       }
-    };
-
-    fetchProfile();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const openSupportCall = () => {
     const supportNumber = profile?.phone || t('profilePhoneValue');
@@ -96,74 +108,126 @@ export function ProfileScreen({
     Linking.openURL(`tel:${cleanedNumber}`);
   };
 
-  const retryFetchProfile = () => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await BaseApi.get('/suppliers/profile');
-        setProfile(response);
-      } catch (err: any) {
-        setError(err?.message || 'Failed to load profile');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const retryFetchProfile = loadProfile;
 
-    fetchProfile();
-  };
+  const profileAddress = [profile?.address_line_1, profile?.city, profile?.state]
+    .filter(Boolean)
+    .join(', ');
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: palette.background },
-        ]}
+      <AppRefreshScrollView
+        onRefresh={loadProfile}
+        contentContainerStyle={styles.stateContainer}
       >
-        <AppText style={[styles.loadingText, { color: palette.text }]}>
-          Loading profile...
-        </AppText>
-      </View>
+        <View
+          style={[
+            styles.stateCard,
+            {
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+              shadowColor: palette.shadow,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.stateIconWrap,
+              {
+                backgroundColor: palette.accentSoft,
+                borderColor: palette.accentSoftBorder,
+              },
+            ]}
+          >
+            <AppIcon name="profile" size={22} color={palette.accentStrong} />
+          </View>
+          <AppText style={[styles.stateTitle, { color: palette.text }]}>
+            {t('profileHeading')}
+          </AppText>
+          <AppText style={[styles.stateBody, { color: palette.muted }]}>
+            Loading profile...
+          </AppText>
+        </View>
+      </AppRefreshScrollView>
     );
   }
 
   if (error) {
     return (
-      <View
-        style={[styles.errorContainer, { backgroundColor: palette.background }]}
+      <AppRefreshScrollView
+        onRefresh={loadProfile}
+        contentContainerStyle={styles.stateContainer}
       >
-        <AppText style={[styles.errorText, { color: palette.text }]}>
-          {error}
-        </AppText>
-        <AppButton
-          title="Retry"
-          onPress={retryFetchProfile}
-          style={styles.retryButton}
-        />
-      </View>
+        <View
+          style={[
+            styles.stateCard,
+            {
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+              shadowColor: palette.shadow,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.stateIconWrap,
+              styles.errorStateIconWrap,
+            ]}
+          >
+            <AppIcon name="info" size={22} color="#DC2626" />
+          </View>
+          <AppText style={[styles.stateTitle, { color: palette.text }]}>
+            {t('profileHeading')}
+          </AppText>
+          <AppText style={[styles.stateBody, { color: palette.muted }]}>
+            {error}
+          </AppText>
+          <AppButton
+            title="Retry"
+            onPress={retryFetchProfile}
+            variant="primary"
+            style={styles.retryButton}
+          />
+        </View>
+      </AppRefreshScrollView>
     );
   }
 
   if (!profile) {
     return (
-      <View
-        style={[styles.errorContainer, { backgroundColor: palette.background }]}
+      <AppRefreshScrollView
+        onRefresh={loadProfile}
+        contentContainerStyle={styles.stateContainer}
       >
-        <AppText style={[styles.errorText, { color: palette.text }]}>
-          No profile data available
-        </AppText>
-        <AppButton
-          title="Retry"
-          onPress={retryFetchProfile}
-          style={styles.retryButton}
-        />
-      </View>
+        <View
+          style={[
+            styles.stateCard,
+            {
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+              shadowColor: palette.shadow,
+            },
+          ]}
+        >
+          <AppText style={[styles.stateTitle, { color: palette.text }]}>
+            {t('profileHeading')}
+          </AppText>
+          <AppText style={[styles.stateBody, { color: palette.muted }]}>
+            No profile data available
+          </AppText>
+          <AppButton
+            title="Retry"
+            onPress={retryFetchProfile}
+            variant="primary"
+            style={styles.retryButton}
+          />
+        </View>
+      </AppRefreshScrollView>
     );
   }
 
   return (
-    <>
+    <AppRefreshScrollView onRefresh={loadProfile}>
       <AppText style={[styles.sectionTitle, { color: palette.text }]}>
         {t('profileHeading')}
       </AppText>
@@ -178,19 +242,50 @@ export function ProfileScreen({
           profile.online ? t('profileOnlineLabel') : t('profileOfflineLabel')
         }
         badgePrimary={profile.verified ? t('profileVerifiedBadge') : ''}
-        badgeSecondary={`${t('profileSinceLabel')}: ${new Date(
-          profile.created_at,
-        ).getFullYear()}`}
+        badgeSecondary={
+          profile.created_at
+            ? `${t('profileSinceLabel')}: ${new Date(profile.created_at).getFullYear()}`
+            : ''
+        }
         metrics={[
           {
             icon: 'star',
             label: t('profileRatingLabel'),
-            value: `${profile.ratings}/5`,
+            value: profile.ratings ? `${profile.ratings}/5` : '—',
           },
           { icon: 'shield', label: t('profileCompletionLabel'), value: '97%' },
           { icon: 'clock', label: t('profileResponseLabel'), value: '3 min' },
         ]}
       />
+
+      <ProfileCard
+        title={t('profileSummaryTitle')}
+        subtitle={t('profileSummarySubtitle')}
+      >
+        <View style={styles.stack}>
+          <ProfileDetailRow
+            icon="document"
+            label={t('profileGstinLabel')}
+            value={profile.gstin || '—'}
+          />
+          <ProfileDetailRow
+            icon="mail"
+            label={t('profileEmailLabel')}
+            value={profile.email || '—'}
+          />
+          <ProfileDetailRow
+            icon="location"
+            label={t('profileAddressLabel')}
+            value={profileAddress || '—'}
+          />
+          <AppButton
+            title={t('profileSupportButton')}
+            onPress={openSupportCall}
+            variant="primary"
+            style={styles.supportButton}
+          />
+        </View>
+      </ProfileCard>
 
       <ProfileCard
         title={t('profileOperationsTitle')}
@@ -205,7 +300,11 @@ export function ProfileScreen({
           <ProfileDetailRow
             icon="location"
             label={t('profileCoverageLabel')}
-            value={`${profile.city}, ${profile.state}, ${profile.country}`}
+            value={
+              [profile.city, profile.state, profile.country]
+                .filter(Boolean)
+                .join(', ') || '—'
+            }
           />
           <ProfileDetailRow
             icon="clock"
@@ -320,11 +419,12 @@ export function ProfileScreen({
         <AppButton
           title={t('logoutButton')}
           onPress={onRequestLogout}
+          variant="danger"
           style={styles.logoutButton}
           textStyle={styles.logoutButtonText}
         />
       </ProfileCard>
-    </>
+    </AppRefreshScrollView>
   );
 }
 
@@ -359,35 +459,57 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logoutButton: {
-    backgroundColor: '#DC2626',
-    borderColor: '#DC2626',
     borderRadius: 18,
   },
   logoutButtonText: {
-    color: '#FFFFFF',
     fontWeight: '800',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-  },
-  errorContainer: {
+  stateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  errorText: {
-    fontSize: 16,
+  stateCard: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 28,
+    padding: 24,
+    alignItems: 'center',
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    elevation: 5,
+  },
+  stateIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
+  },
+  errorStateIconWrap: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  stateTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 8,
     textAlign: 'center',
   },
+  stateBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 18,
+  },
   retryButton: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
+    minWidth: 140,
   },
 });

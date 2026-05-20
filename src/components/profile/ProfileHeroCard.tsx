@@ -28,6 +28,7 @@ export function ProfileHeroCard({
   metrics,
 }: ProfileHeroCardProps) {
   const palette = useAppPalette();
+  const badges = [badgePrimary, badgeSecondary].filter(Boolean);
 
   return (
     <View
@@ -76,7 +77,7 @@ export function ProfileHeroCard({
       </View>
 
       <View style={styles.badgeRow}>
-        {[badgePrimary, badgeSecondary].map(badge => (
+        {badges.map(badge => (
           <View
             key={badge}
             style={[

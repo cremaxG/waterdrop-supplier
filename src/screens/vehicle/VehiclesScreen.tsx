@@ -7,11 +7,19 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { AppButton, AppText } from '../../components';
+import {
+  AppButton,
+  AppIcon,
+  AppRefreshScrollView,
+  AppSnackbar,
+  AppText,
+} from '../../components';
 import { VehicleListCard } from '../../components/vehicles';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useOperations } from '../../providers/OperationsProvider';
 import { useTranslation } from '../../providers/AppProviders';
+import SupplierApi from '../../service/supplierApi';
+import type { SupplierProfile } from '../../service/supplierApi';
 import { AddVehicleScreen, NewVehicleDraft } from './AddVehicleScreen';
 import { VehicleHistoryScreen } from './VehicleHistoryScreen';
 import { VehicleHistoryOrderScreen } from './VehicleHistoryOrderScreen';
@@ -19,6 +27,37 @@ import { VehicleDetailsScreen, VehicleRecord } from './VehicleDetailsScreen';
 
 type VehicleFilterKey = 'all' | 'online' | 'offline' | 'pending';
 type VehicleFilterTone = 'neutral' | 'success' | 'danger' | 'pending';
+
+function unwrapApiData<T>(response: T | { data?: T } | null | undefined): T | null {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data?: T }).data ?? null;
+  }
+  return (response as T) ?? null;
+}
+
+function unwrapSupplierProfile(response: any): SupplierProfile | null {
+  const unwrapped = unwrapApiData<any>(response);
+  return (unwrapped?.supplier ?? unwrapped?.profile ?? unwrapped) as SupplierProfile | null;
+}
+
+function unwrapCreatedVehicle(response: any) {
+  const unwrapped = unwrapApiData<any>(response);
+  return unwrapped?.vehicle ?? unwrapped;
+}
+
+function extractApiErrorMessage(response: any) {
+  if (!response || typeof response !== 'object') {
+    return null;
+  }
+
+  return (
+    response.message ??
+    response.error ??
+    response.errors?.[0]?.message ??
+    response.data?.message ??
+    null
+  );
+}
 
 interface VehiclesScreenProps {
   onDetailVisibilityChange?: (isVisible: boolean) => void;
@@ -29,7 +68,8 @@ export function VehiclesScreen({
 }: VehiclesScreenProps) {
   const { t } = useTranslation();
   const palette = useAppPalette();
-  const { vehicles, addVehicle, toggleVehicleAvailability } = useOperations();
+  const { vehicles, addVehicle, refreshVehicles, toggleVehicleAvailability } =
+    useOperations();
   const { width } = useWindowDimensions();
   const [selectedFilter, setSelectedFilter] = useState<VehicleFilterKey>('all');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
@@ -38,6 +78,11 @@ export function VehiclesScreen({
     null,
   );
   const [isAddVehicleVisible, setAddVehicleVisible] = useState(false);
+  const [isSnackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarTone, setSnackbarTone] = useState<'success' | 'error' | 'info'>(
+    'success',
+  );
   const detailTranslateX = useRef(new Animated.Value(width)).current;
   const historyTranslateX = useRef(new Animated.Value(width)).current;
   const orderTranslateX = useRef(new Animated.Value(width)).current;
@@ -93,6 +138,18 @@ export function VehiclesScreen({
       return true;
     });
   }, [selectedFilter, vehicles]);
+
+  const vehicleSummary = useMemo(() => {
+    const approvedVehicles = vehicles.filter(
+      vehicle => vehicle.reviewStatus === 'approved',
+    );
+
+    return {
+      total: vehicles.length,
+      online: approvedVehicles.filter(vehicle => vehicle.isOnline).length,
+      pending: vehicles.filter(vehicle => vehicle.reviewStatus === 'pending').length,
+    };
+  }, [vehicles]);
 
   useEffect(() => {
     if (!selectedVehicleId) {
@@ -221,7 +278,7 @@ export function VehiclesScreen({
     });
   };
 
-  const closeAddVehicle = () => {
+  const closeAddVehicle = (onClosed?: () => void) => {
     Animated.timing(addVehicleTranslateX, {
       toValue: width,
       duration: 210,
@@ -234,40 +291,102 @@ export function VehiclesScreen({
 
       setAddVehicleVisible(false);
       onDetailVisibilityChange?.(false);
+      if (typeof onClosed === 'function') {
+        onClosed();
+      }
     });
   };
 
-  const handleAddVehicle = (draft: NewVehicleDraft) => {
-    const nextVehicleId = `vehicle-${Date.now()}`;
-    const normalizedPhone = draft.driverPhone.replace(/[^\d+]/g, '');
+  const handleAddVehicle = async (draft: NewVehicleDraft) => {
+    try {
+      const profileResponse = await SupplierApi.getSupplierProfile();
+      const profile = unwrapSupplierProfile(profileResponse);
 
-    const newVehicle: VehicleRecord = {
-      id: nextVehicleId,
-      name: draft.name.trim(),
-      route: draft.route.trim(),
-      capacity: draft.capacity.trim(),
-      currentLocation: draft.currentLocation.trim(),
-      driverName: draft.driverName.trim(),
-      driverPhone: normalizedPhone,
-      driverRating: t('vehicleAddPendingValue'),
-      shiftWindow: draft.shiftWindow.trim(),
-      earningsToday: '₹0',
-      deliveredStops: '0',
-      pendingStops: '0',
-      cashCollected: '₹0',
-      fuelLevel: t('vehicleAddPendingValue'),
-      lastUpdated: t('vehicleAddJustNowLabel'),
-      nextService: t('vehicleAddReviewServiceValue'),
-      etaToHub: t('vehicleAddReviewEtaValue'),
-      isOnline: false,
-      reviewStatus: 'pending',
-      products: [],
-      history: [],
-    };
+      if (!profile?.id) {
+        throw new Error('Unable to load supplier profile.');
+      }
 
-    addVehicle(newVehicle);
-    setSelectedFilter('pending');
-    closeAddVehicle();
+      const supplierLat = String(profile.lat ?? '').trim();
+      const supplierLng = String(profile.lng ?? '').trim();
+
+      if (!supplierLat || !supplierLng) {
+        throw new Error('Supplier location is missing. Please update the supplier profile location first.');
+      }
+
+      const payload = {
+        phone: draft.phone.trim(),
+        email: draft.email.trim(),
+        supplier_id: profile.id,
+        vehicle_number: draft.vehicleNumber.trim(),
+        name: draft.name.trim(),
+        lat: supplierLat,
+        lng: supplierLng,
+      };
+
+      const createVehicleResponse = await SupplierApi.createVehicle(payload);
+      const createVehicleResult = unwrapApiData<any>(createVehicleResponse);
+      const response = unwrapCreatedVehicle(createVehicleResponse);
+
+      if (!response || (!response.id && !response.vehicle_number && !response.name)) {
+        throw new Error(
+          extractApiErrorMessage(createVehicleResponse) ??
+            'Unable to add vehicle. Please try again.',
+        );
+      }
+
+      const nextVehicleId = String(response.id ?? `vehicle-${Date.now()}`);
+
+      const newVehicle: VehicleRecord = {
+        id: nextVehicleId,
+        name: response.name ?? draft.name.trim(),
+        route: response.vehicle_number ?? draft.vehicleNumber.trim(),
+        capacity: 'N/A',
+        currentLocation:
+          [response.lat ?? supplierLat, response.lng ?? supplierLng]
+            .filter(Boolean)
+            .join(', ') || 'Location pending',
+        driverName: '',
+        driverPhone: response.phone ?? draft.phone.trim(),
+        driverRating: t('vehicleAddPendingValue'),
+        shiftWindow: '',
+        earningsToday: '₹0',
+        deliveredStops: '0',
+        pendingStops: '0',
+        cashCollected: '₹0',
+        fuelLevel: t('vehicleAddPendingValue'),
+        lastUpdated: t('vehicleAddJustNowLabel'),
+        nextService: t('vehicleAddReviewServiceValue'),
+        etaToHub: t('vehicleAddReviewEtaValue'),
+        isOnline: false,
+        reviewStatus: 'pending',
+        products: [],
+        history: [],
+      };
+
+      try {
+        await refreshVehicles();
+      } catch (refreshError) {
+        console.warn('Unable to refresh vehicles after creation', refreshError);
+        addVehicle(newVehicle);
+      }
+
+      setSelectedFilter('pending');
+      closeAddVehicle(() => {
+        setSnackbarMessage(
+          createVehicleResult?.message ?? t('vehicleAddSuccessSnackbar'),
+        );
+        setSnackbarTone('success');
+        setSnackbarVisible(true);
+      });
+    } catch (error: any) {
+      setSnackbarMessage(
+        extractApiErrorMessage(error) ??
+          error?.message ??
+          t('vehicleAddErrorSnackbar'),
+      );
+      setSnackbarTone('error');
+      setSnackbarVisible(true);
+    }
   };
 
   const handleToggleVehicleAvailability = () => {
@@ -335,22 +454,109 @@ export function VehiclesScreen({
 
   return (
     <View style={styles.screenRoot}>
-      <View style={styles.listScreen}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerCopy}>
-            <AppText style={[styles.sectionTitle, { color: palette.text }]}>
-              {t('vehiclesHeading')}
-            </AppText>
-            <AppText style={[styles.sectionSubtitle, { color: palette.muted }]}>
-              {t('vehiclesSubtitle')}
-            </AppText>
+      <AppRefreshScrollView
+        refreshEnabled={
+          !selectedVehicleId &&
+          !isHistoryScreenVisible &&
+          !selectedHistoryItemId &&
+          !isAddVehicleVisible
+        }
+        onRefresh={refreshVehicles}
+      >
+        <View style={styles.listScreen}>
+        <View
+          style={[
+            styles.heroCard,
+            {
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+              shadowColor: palette.shadow,
+            },
+          ]}
+        >
+          <View pointerEvents="none" style={styles.heroDecor}>
+            <View
+              style={[
+                styles.heroBubble,
+                styles.heroBubbleTop,
+                { backgroundColor: palette.heroTop },
+              ]}
+            />
+            <View
+              style={[
+                styles.heroBubble,
+                styles.heroBubbleBottom,
+                { backgroundColor: palette.heroBottom },
+              ]}
+            />
           </View>
-          <AppButton
-            title={t('vehicleAddButton')}
-            onPress={openAddVehicle}
-            style={styles.addButton}
-            textStyle={styles.addButtonText}
-          />
+
+          <View style={styles.headerRow}>
+            <View style={styles.headerCopy}>
+              <View
+                style={[
+                  styles.heroBadge,
+                  {
+                    backgroundColor: palette.accentSoft,
+                    borderColor: palette.accentSoftBorder,
+                  },
+                ]}
+              >
+                <AppIcon name="vehicles" size={18} color={palette.accentStrong} />
+                <AppText style={[styles.heroBadgeText, { color: palette.accentStrong }]}>
+                  {t('vehiclesTab')}
+                </AppText>
+              </View>
+              <AppText style={[styles.sectionTitle, { color: palette.text }]}>
+                {t('vehiclesHeading')}
+              </AppText>
+              <AppText style={[styles.sectionSubtitle, { color: palette.muted }]}>
+                {t('vehiclesSubtitle')}
+              </AppText>
+            </View>
+            <AppButton
+              title={t('vehicleAddButton')}
+              onPress={openAddVehicle}
+              variant="primary"
+              style={styles.addButton}
+              textStyle={styles.addButtonText}
+            />
+          </View>
+
+          <View style={styles.summaryRow}>
+            {[
+              {
+                label: t('vehiclesFilterAll'),
+                value: String(vehicleSummary.total),
+              },
+              {
+                label: t('dashboardOnlineVehiclesLabel'),
+                value: String(vehicleSummary.online),
+              },
+              {
+                label: t('dashboardPendingReviewLabel'),
+                value: String(vehicleSummary.pending),
+              },
+            ].map(item => (
+              <View
+                key={item.label}
+                style={[
+                  styles.summaryCard,
+                  {
+                    backgroundColor: palette.surfaceSoft,
+                    borderColor: palette.border,
+                  },
+                ]}
+              >
+                <AppText style={[styles.summaryValue, { color: palette.text }]}>
+                  {item.value}
+                </AppText>
+                <AppText style={[styles.summaryLabel, { color: palette.muted }]}>
+                  {item.label}
+                </AppText>
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={styles.filterRow}>
@@ -419,9 +625,17 @@ export function VehiclesScreen({
             <AppText style={[styles.emptyStateBody, { color: palette.muted }]}>
               {t('vehiclesEmptyBody')}
             </AppText>
+            <AppButton
+              title={t('vehicleAddButton')}
+              onPress={openAddVehicle}
+              variant="primary"
+              style={styles.emptyStateButton}
+              textStyle={styles.addButtonText}
+            />
           </View>
         ) : null}
-      </View>
+        </View>
+      </AppRefreshScrollView>
 
       {selectedVehicle ? (
         <Animated.View
@@ -489,11 +703,21 @@ export function VehiclesScreen({
           ]}
         >
           <AddVehicleScreen
-            onBack={closeAddVehicle}
+            onBack={() => closeAddVehicle()}
             onSubmit={handleAddVehicle}
           />
         </Animated.View>
       ) : null}
+
+      <AppSnackbar
+        visible={isSnackbarVisible}
+        message={snackbarMessage}
+        tone={snackbarTone}
+        onHide={() => {
+          setSnackbarVisible(false);
+          setSnackbarMessage('');
+        }}
+      />
     </View>
   );
 }
@@ -505,6 +729,43 @@ const styles = StyleSheet.create({
   },
   listScreen: {
     flex: 1,
+  },
+  heroCard: {
+    borderWidth: 1,
+    borderRadius: 28,
+    padding: 22,
+    marginBottom: 18,
+    overflow: 'hidden',
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    shadowOffset: {
+      width: 0,
+      height: 14,
+    },
+    elevation: 8,
+  },
+  heroDecor: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  heroBubble: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  heroBubbleTop: {
+    width: 180,
+    height: 180,
+    top: -70,
+    right: -30,
+  },
+  heroBubbleBottom: {
+    width: 150,
+    height: 150,
+    bottom: -50,
+    left: -20,
   },
   overlayScreen: {
     ...StyleSheet.absoluteFill,
@@ -519,6 +780,21 @@ const styles = StyleSheet.create({
   headerCopy: {
     flex: 1,
   },
+  heroBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  heroBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
   sectionTitle: {
     fontSize: 28,
     fontWeight: '800',
@@ -529,16 +805,31 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   addButton: {
-    backgroundColor: '#0284C7',
-    borderColor: '#0284C7',
     borderRadius: 18,
     paddingHorizontal: 14,
-    paddingVertical: 12,
   },
   addButtonText: {
-    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  summaryCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   filterRow: {
     flexDirection: 'row',
@@ -560,14 +851,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 24,
     padding: 18,
+    gap: 14,
   },
   emptyStateTitle: {
     fontSize: 18,
     fontWeight: '800',
-    marginBottom: 6,
   },
   emptyStateBody: {
     fontSize: 14,
     lineHeight: 21,
+  },
+  emptyStateButton: {
+    alignSelf: 'flex-start',
   },
 });

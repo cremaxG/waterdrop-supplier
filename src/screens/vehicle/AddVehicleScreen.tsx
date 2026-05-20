@@ -1,23 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { AppButton, AppIcon, AppInput, AppText } from '../../components';
 import { VehicleSectionCard } from '../../components/vehicles';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
 
 export interface NewVehicleDraft {
+  vehicleNumber: string;
   name: string;
-  route: string;
-  capacity: string;
-  currentLocation: string;
-  driverName: string;
-  driverPhone: string;
-  shiftWindow: string;
+  phone: string;
+  email: string;
 }
 
 interface AddVehicleScreenProps {
@@ -32,19 +24,21 @@ export function AddVehicleScreen({
   const { t } = useTranslation();
   const palette = useAppPalette();
   const [draft, setDraft] = useState<NewVehicleDraft>({
+    vehicleNumber: '',
     name: '',
-    route: '',
-    capacity: '',
-    currentLocation: '',
-    driverName: '',
-    driverPhone: '',
-    shiftWindow: '',
+    phone: '',
+    email: '',
   });
 
   const isValid = useMemo(
     () =>
-      Object.values(draft).every(value => value.trim().length > 0) &&
-      draft.driverPhone.replace(/\D/g, '').length >= 10,
+      [
+        draft.vehicleNumber,
+        draft.name,
+        draft.phone,
+        draft.email,
+      ].every(value => value.trim().length > 0) &&
+      draft.phone.replace(/\D/g, '').length >= 10,
     [draft],
   );
 
@@ -101,48 +95,34 @@ export function AddVehicleScreen({
       >
         <View style={styles.stack}>
           <AppInput
+            value={draft.vehicleNumber}
+            onChangeText={value => updateField('vehicleNumber', value)}
+            placeholder={t('vehicleAddNumberPlaceholder')}
+          />
+          <AppInput
             value={draft.name}
             onChangeText={value => updateField('name', value)}
             placeholder={t('vehicleAddNamePlaceholder')}
-          />
-          <AppInput
-            value={draft.route}
-            onChangeText={value => updateField('route', value)}
-            placeholder={t('vehicleAddRoutePlaceholder')}
-          />
-          <AppInput
-            value={draft.capacity}
-            onChangeText={value => updateField('capacity', value)}
-            placeholder={t('vehicleAddCapacityPlaceholder')}
-          />
-          <AppInput
-            value={draft.currentLocation}
-            onChangeText={value => updateField('currentLocation', value)}
-            placeholder={t('vehicleAddLocationPlaceholder')}
           />
         </View>
       </VehicleSectionCard>
 
       <VehicleSectionCard
-        title={t('vehicleAddSectionDriver')}
-        subtitle={t('vehicleAddSectionDriverSubtitle')}
+        title={t('vehicleAddSectionContact')}
+        subtitle={t('vehicleAddSectionContactSubtitle')}
       >
         <View style={styles.stack}>
           <AppInput
-            value={draft.driverName}
-            onChangeText={value => updateField('driverName', value)}
-            placeholder={t('vehicleAddDriverNamePlaceholder')}
-          />
-          <AppInput
-            value={draft.driverPhone}
-            onChangeText={value => updateField('driverPhone', value)}
-            placeholder={t('vehicleAddDriverPhonePlaceholder')}
+            value={draft.phone}
+            onChangeText={value => updateField('phone', value)}
+            placeholder={t('vehicleAddPhonePlaceholder')}
             keyboardType="phone-pad"
           />
           <AppInput
-            value={draft.shiftWindow}
-            onChangeText={value => updateField('shiftWindow', value)}
-            placeholder={t('vehicleAddShiftPlaceholder')}
+            value={draft.email}
+            onChangeText={value => updateField('email', value)}
+            placeholder={t('vehicleAddEmailPlaceholder')}
+            keyboardType="email-address"
           />
         </View>
       </VehicleSectionCard>

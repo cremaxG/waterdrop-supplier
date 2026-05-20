@@ -192,7 +192,8 @@ export function AuthScreen({
         phone: normalizedPhone,
       };
 
-      await BaseApi.post('/auth/suppliers/request-otp', payload, {}, {}, '');
+      const res = await BaseApi.post('/auth/suppliers/request-otp', payload, {}, {}, '');
+      console.debug('OTP request response:', res);
 
       setSignInStep('otp');
       setPassword('');
@@ -369,7 +370,7 @@ export function AuthScreen({
       setSupplierOnline(true);
       setSupplierRatings('0');
       setSupplierVerified(true);
-
+      console.debug('Registration response:', response);
       Alert.alert(
         'Success',
         response.message ||

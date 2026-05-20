@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import {
   Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -506,17 +505,16 @@ export function MainTabNavigator({
         />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.container,
+      <View
+        style={[
+          styles.contentArea,
           {
             backgroundColor: palette.background,
-            paddingBottom: Math.max(insets.bottom + 110, 130),
           },
         ]}
       >
         {renderActiveTab()}
-      </ScrollView>
+      </View>
 
       {!isVehicleDetailsVisible && !isProductDetailsVisible ? (
         <View
@@ -586,10 +584,8 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    flexGrow: 1,
+  contentArea: {
+    flex: 1,
   },
   backgroundDecor: {
     position: 'absolute',

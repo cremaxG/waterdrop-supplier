@@ -1,7 +1,240 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
-import { initialProducts, initialVehicles } from '../data/operations';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import ProductApi from '../service/productApi';
+import SupplierApi from '../service/supplierApi';
 import type { ProductRecord } from '../screens/product/ProductDetailsScreen';
 import type { VehicleRecord } from '../screens/vehicle/VehicleDetailsScreen';
+
+function extractCollection(response: any, key?: string) {
+  const candidates = [
+    response,
+    response?.data,
+    key ? response?.[key] : null,
+    key ? response?.data?.[key] : null,
+    response?.items,
+    response?.data?.items,
+    response?.results,
+    response?.data?.results,
+    response?.rows,
+    response?.data?.rows,
+    key ? response?.[key]?.items : null,
+    key ? response?.data?.[key]?.items : null,
+    key ? response?.[key]?.rows : null,
+    key ? response?.data?.[key]?.rows : null,
+    key ? response?.[key]?.data : null,
+    key ? response?.data?.[key]?.data : null,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+}
+
+function toNumber(value: any) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizeVehicleInventoryEntry(entry: any) {
+  return {
+    id: String(
+      entry.id ??
+        entry.vehicle_id ??
+        entry.vehicleId ??
+        entry.vehicle?.id ??
+        entry.name ??
+        '',
+    ),
+    vehicleName:
+      entry.vehicle_name ??
+      entry.vehicleName ??
+      entry.vehicle?.name ??
+      entry.name ??
+      'Unknown vehicle',
+    quantity:
+      toNumber(
+        entry.quantity ??
+          entry.qty ??
+          entry.stock_qty ??
+          entry.stockQty ??
+          entry.loaded_qty ??
+          entry.loadedQty ??
+          entry.units,
+      ) || 0,
+  };
+}
+
+function extractSupplierId(response: any) {
+  const profile =
+    response?.data?.supplier ??
+    response?.data?.profile ??
+    response?.supplier ??
+    response?.profile ??
+    response;
+
+  const supplierId = Number(profile?.id);
+  return Number.isFinite(supplierId) ? supplierId : null;
+}
+
+function extractQuantityFromVehicleProduct(value: string) {
+  const match = value.match(/(\d+)/);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function deriveVehicleInventoryFromVehicles(
+  productName: string,
+  vehicles: VehicleRecord[],
+) {
+  const normalizedProductName = productName.trim().toLowerCase();
+
+  return vehicles
+    .map(vehicle => {
+      const matchingProduct = vehicle.products.find(
+        item => item.name.trim().toLowerCase() === normalizedProductName,
+      );
+
+      if (!matchingProduct) {
+        return null;
+      }
+
+      return {
+        id: vehicle.id,
+        vehicleName: vehicle.name,
+        quantity: extractQuantityFromVehicleProduct(matchingProduct.quantity),
+      };
+    })
+    .filter((entry): entry is { id: string; vehicleName: string; quantity: number } =>
+      Boolean(entry && entry.quantity > 0),
+    );
+}
+
+function normalizeVehicle(item: any): VehicleRecord {
+  const products = Array.isArray(item.products) ? item.products : [];
+  const history = Array.isArray(item.history) ? item.history : [];
+
+  return {
+    id: String(item.id ?? item.vehicle_number ?? 'unknown-vehicle'),
+    name: item.name ?? item.vehicle_number ?? 'Unnamed vehicle',
+    route: item.route ?? item.vehicle_number ?? 'Unknown route',
+    capacity: item.capacity ?? 'N/A',
+    currentLocation:
+      item.currentLocation ||
+      [item.lat, item.lng].filter(Boolean).join(', ') ||
+      'Unknown location',
+    driverName: item.driverName ?? item.driver_name ?? '',
+    driverPhone: item.driverPhone ?? item.phone ?? '',
+    driverRating: item.driverRating ?? 'N/A',
+    shiftWindow: item.shiftWindow ?? '',
+    earningsToday: item.earningsToday ?? '₹0',
+    deliveredStops: item.deliveredStops ?? '0',
+    pendingStops: item.pendingStops ?? '0',
+    cashCollected: item.cashCollected ?? '₹0',
+    fuelLevel: item.fuelLevel ?? 'N/A',
+    lastUpdated: item.lastUpdated ?? 'Just now',
+    nextService: item.nextService ?? '',
+    etaToHub: item.etaToHub ?? '',
+    isOnline: Boolean(item.online ?? item.isOnline),
+    reviewStatus: (item.reviewStatus ?? item.status ?? 'pending') as
+      | 'approved'
+      | 'pending',
+    products,
+    history,
+  };
+}
+
+function parseDemand(value: any) {
+  const numeric = Number(String(value).replace(/[^0-9.]/g, ''));
+  if (Number.isNaN(numeric)) {
+    return 'N/A';
+  }
+  return `${Math.round(numeric)}%`;
+}
+
+function getTrendKey(value: any) {
+  const numeric = Number(String(value).replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(numeric)) {
+    return 'productTrendSteady';
+  }
+  if (numeric >= 80) {
+    return 'productTrendFast';
+  }
+  if (numeric >= 50) {
+    return 'productTrendSteady';
+  }
+  return 'productTrendLow';
+}
+
+function normalizeProduct(item: any, vehicles: VehicleRecord[] = []): ProductRecord {
+  const stockQty =
+    toNumber(
+      item.stock_qty ??
+        item.stockQty ??
+        item.godown_stock ??
+        item.godownStock ??
+        item.godownInventory ??
+        item.warehouse_stock ??
+        item.warehouseStock,
+    ) || 0;
+  const reorderLevel =
+    toNumber(
+      item.reorder_level ??
+        item.reorderLevel ??
+        item.min_stock ??
+        item.minStock,
+    ) || 0;
+  const vehicleInventorySource =
+    item.vehicle_inventory ??
+    item.vehicleInventory ??
+    item.vehicle_stocks ??
+    item.vehicleStocks ??
+    item.assigned_vehicles ??
+    item.assignedVehicles ??
+    item.inventory_by_vehicle ??
+    item.inventoryByVehicle;
+  const explicitVehicleInventory = Array.isArray(vehicleInventorySource)
+    ? vehicleInventorySource.map(normalizeVehicleInventoryEntry)
+    : [];
+  const vehicleInventory =
+    explicitVehicleInventory.length > 0
+      ? explicitVehicleInventory
+      : deriveVehicleInventoryFromVehicles(item.name ?? item.title ?? '', vehicles);
+  const explicitVehicleUnits = vehicleInventory.reduce(
+    (sum: number, entry: { quantity: number }) => sum + entry.quantity,
+    0,
+  );
+  const totalStockCandidate = toNumber(
+    item.totalStock ??
+      item.total_stock ??
+      item.stock ??
+      item.total_qty ??
+      item.totalQty ??
+      item.quantity,
+  );
+  const derivedVehicleUnits =
+    explicitVehicleUnits > 0
+      ? explicitVehicleUnits
+      : Math.max(totalStockCandidate - stockQty, 0);
+  const totalStock =
+    totalStockCandidate > 0 ? totalStockCandidate : stockQty + derivedVehicleUnits;
+
+  return {
+    id: String(item.id ?? item.sku ?? `product-${Date.now()}`),
+    name: item.name ?? item.title ?? 'Untitled product',
+    sku: item.sku ?? item.code ?? '',
+    category: item.category ?? '',
+    unitLabel: item.uom ?? item.unitLabel ?? '',
+    totalStock,
+    godownInventory: stockQty,
+    demand: parseDemand(item.demand ?? item.demand_value ?? item.demandValue),
+    trendKey: getTrendKey(item.demand ?? item.demand_value ?? item.demandValue),
+    reorderLevel,
+    description: item.description ?? '',
+    vehicleInventory,
+  };
+}
 
 interface OperationsState {
   vehicles: VehicleRecord[];
@@ -10,8 +243,10 @@ interface OperationsState {
 
 interface OperationsContextValue extends OperationsState {
   addVehicle: (vehicle: VehicleRecord) => void;
+  refreshVehicles: () => Promise<void>;
   toggleVehicleAvailability: (vehicleId: string) => void;
   addProduct: (product: ProductRecord) => void;
+  refreshProducts: () => Promise<void>;
   updateProductGodownInventory: (productId: string, nextQuantity: number) => void;
   updateProductVehicleInventory: (
     productId: string,
@@ -28,9 +263,78 @@ export function OperationsProvider({
   children: React.ReactNode;
 }) {
   const [state, setState] = useState<OperationsState>({
-    vehicles: initialVehicles,
-    products: initialProducts,
+    vehicles: [],
+    products: [],
   });
+
+  const loadProducts = async () => {
+    const profileResponse = await SupplierApi.getSupplierProfile();
+    const supplierId = extractSupplierId(profileResponse);
+    const productResponse = await ProductApi.listProducts(
+      supplierId ? { supplierId } : undefined,
+    );
+    return extractCollection(productResponse, 'products');
+  };
+
+  useEffect(() => {
+    const loadOperations = async () => {
+      try {
+        const [vehicleResponse, productsData] = await Promise.all([
+          SupplierApi.listVehicles(),
+          loadProducts(),
+        ]);
+
+        const vehiclesData = extractCollection(vehicleResponse, 'vehicles');
+        const normalizedVehicles = vehiclesData.map(normalizeVehicle);
+
+        setState({
+          vehicles: normalizedVehicles,
+          products: productsData.map((item: any) =>
+            normalizeProduct(item, normalizedVehicles),
+          ),
+        });
+      } catch (error) {
+        console.warn('Unable to load operations data', error);
+        setState({
+          vehicles: [],
+          products: [],
+        });
+      }
+    };
+
+    loadOperations();
+  }, []);
+
+  const refreshVehicles = async () => {
+    const vehicleResponse = await SupplierApi.listVehicles();
+    const vehiclesData = extractCollection(vehicleResponse, 'vehicles');
+    const normalizedVehicles = vehiclesData.map(normalizeVehicle);
+
+    setState(current => ({
+      ...current,
+      vehicles: normalizedVehicles,
+      products: current.products.map(product => {
+        const derivedVehicleInventory = deriveVehicleInventoryFromVehicles(
+          product.name,
+          normalizedVehicles,
+        );
+        const derivedVehicleUnits = derivedVehicleInventory.reduce(
+          (sum, item) => sum + item.quantity,
+          0,
+        );
+
+        if (derivedVehicleUnits <= 0) {
+          return product;
+        }
+
+        return {
+          ...product,
+          vehicleInventory: derivedVehicleInventory,
+          totalStock: Math.max(product.totalStock, product.godownInventory + derivedVehicleUnits),
+        };
+      }),
+    }));
+  };
 
   const addVehicle = (vehicle: VehicleRecord) => {
     setState(current => ({
@@ -59,6 +363,17 @@ export function OperationsProvider({
     setState(current => ({
       ...current,
       products: [product, ...current.products],
+    }));
+  };
+
+  const refreshProducts = async () => {
+    const productsData = await loadProducts();
+
+    setState(current => ({
+      ...current,
+      products: productsData.map((item: any) =>
+        normalizeProduct(item, current.vehicles),
+      ),
     }));
   };
 
@@ -174,18 +489,17 @@ export function OperationsProvider({
     });
   };
 
-  const value = useMemo(
-    () => ({
-      vehicles: state.vehicles,
-      products: state.products,
-      addVehicle,
-      toggleVehicleAvailability,
-      addProduct,
-      updateProductGodownInventory,
-      updateProductVehicleInventory,
-    }),
-    [state.products, state.vehicles],
-  );
+  const value = {
+    vehicles: state.vehicles,
+    products: state.products,
+    addVehicle,
+    refreshVehicles,
+    toggleVehicleAvailability,
+    addProduct,
+    refreshProducts,
+    updateProductGodownInventory,
+    updateProductVehicleInventory,
+  };
 
   return (
     <OperationsContext.Provider value={value}>

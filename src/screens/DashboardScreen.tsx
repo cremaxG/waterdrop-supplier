@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { AppIcon, AppText } from '../components';
+import { AppIcon, AppRefreshScrollView, AppText } from '../components';
 import { useAppPalette } from '../hooks/useAppPalette';
 import { useOperations } from '../providers/OperationsProvider';
 import { useTranslation } from '../providers/AppProviders';
@@ -15,6 +15,23 @@ const extractNumber = (value: string) => Number(value.replace(/[^\d.]/g, '')) ||
 
 const formatCurrency = (value: number) => `₹${value.toLocaleString('en-IN')}`;
 
+const getProductVehicleUnits = (product: {
+  totalStock: number;
+  godownInventory: number;
+  vehicleInventory: Array<{ quantity: number }>;
+}) => {
+  const explicitVehicleUnits = product.vehicleInventory.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
+
+  if (explicitVehicleUnits > 0) {
+    return explicitVehicleUnits;
+  }
+
+  return Math.max(product.totalStock - product.godownInventory, 0);
+};
+
 export function DashboardScreen({
   onOpenVehicles = () => undefined,
   onOpenProducts = () => undefined,
@@ -22,7 +39,7 @@ export function DashboardScreen({
 }: DashboardScreenProps) {
   const { t } = useTranslation();
   const palette = useAppPalette();
-  const { vehicles, products } = useOperations();
+  const { vehicles, products, refreshProducts, refreshVehicles } = useOperations();
 
   const metrics = useMemo(() => {
     const onlineVehicles = vehicles.filter(
@@ -55,9 +72,7 @@ export function DashboardScreen({
       0,
     );
     const totalVehicleInventory = products.reduce(
-      (total, product) =>
-        total +
-        product.vehicleInventory.reduce((sum, item) => sum + item.quantity, 0),
+      (total, product) => total + getProductVehicleUnits(product),
       0,
     );
     const lowStockProducts = products
@@ -104,7 +119,7 @@ export function DashboardScreen({
 
   const dashboardMetrics = [
     { label: t('dashboardMetricOrders'), value: String(metrics.todayOrders) },
-    { label: t('dashboardMetricVehicles'), value: String(metrics.onlineVehicles) },
+    { label: t('dashboardMetricVehicles'), value: String(vehicles.length) },
     { label: t('dashboardMetricProducts'), value: String(products.length) },
     {
       label: t('dashboardMetricRevenue'),
@@ -113,7 +128,9 @@ export function DashboardScreen({
   ];
 
   return (
-    <>
+    <AppRefreshScrollView
+      onRefresh={() => Promise.all([refreshVehicles(), refreshProducts()]).then(() => undefined)}
+    >
       <View
         style={[
           styles.heroCard,
@@ -152,6 +169,15 @@ export function DashboardScreen({
         <AppText style={[styles.heroSubtitle, { color: palette.muted }]}>
           {t('dashboardSubtitle')}
         </AppText>
+
+        <View style={styles.heroSummary}>
+          <AppText style={[styles.heroSummaryText, { color: palette.text }]}> 
+            {`${products.length} ${t('dashboardMetricProducts')} • ${vehicles.length} ${t('dashboardMetricVehicles')}`}
+          </AppText>
+          <AppText style={[styles.heroSummaryCaption, { color: palette.muted }]}> 
+            {`${t('dashboardGodownLabel')}: ${metrics.totalGodownInventory} • ${t('dashboardVehicleLoadLabel')}: ${metrics.totalVehicleInventory}`}
+          </AppText>
+        </View>
 
         <View style={styles.metricGrid}>
           {dashboardMetrics.map(metric => (
@@ -491,7 +517,7 @@ export function DashboardScreen({
           ))}
         </View>
       </View>
-    </>
+    </AppRefreshScrollView>
   );
 }
 
@@ -553,6 +579,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 23,
     marginBottom: 18,
+  },
+  heroSummary: {
+    marginBottom: 18,
+  },
+  heroSummaryText: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  heroSummaryCaption: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   metricGrid: {
     flexDirection: 'row',

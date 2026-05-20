@@ -53,10 +53,14 @@ export function ProductDetailsScreen({
     ),
   );
 
-  const totalVehicleQuantity = product.vehicleInventory.reduce(
+  const explicitVehicleQuantity = product.vehicleInventory.reduce(
     (total, item) => total + item.quantity,
     0,
   );
+  const totalVehicleQuantity =
+    explicitVehicleQuantity > 0
+      ? explicitVehicleQuantity
+      : Math.max(product.totalStock - product.godownInventory, 0);
 
   return (
     <ScrollView
