@@ -57,15 +57,6 @@ object AppShortcutPublisher {
       ),
       shortcut(
         context = context,
-        id = "open_products",
-        shortLabel = "Open Products",
-        longLabel = productsSubtitle,
-        uri = "watersupplier://shortcut/products",
-        iconRes = R.drawable.ic_shortcut_product,
-        rank = 2,
-      ),
-      shortcut(
-        context = context,
         id = if (pendingReviews > 0) "open_reviews" else "view_orders",
         shortLabel = if (pendingReviews > 0) "Pending Reviews" else "View Orders",
         longLabel =
@@ -86,7 +77,7 @@ object AppShortcutPublisher {
           } else {
             R.drawable.ic_shortcut_orders
           },
-        rank = 3,
+        rank = 2,
       ),
       shortcut(
         context = context,
@@ -95,6 +86,15 @@ object AppShortcutPublisher {
         longLabel = fleetSubtitle,
         uri = "watersupplier://shortcut/vehicles",
         iconRes = R.drawable.ic_shortcut_fleet,
+        rank = 3,
+      ),
+      shortcut(
+        context = context,
+        id = "open_products",
+        shortLabel = "Open Products",
+        longLabel = productsSubtitle,
+        uri = "watersupplier://shortcut/products",
+        iconRes = R.drawable.ic_shortcut_product,
         rank = 4,
       ),
     )
