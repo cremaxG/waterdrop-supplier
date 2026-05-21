@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   SafeAreaView,
@@ -15,6 +15,9 @@ import { DashboardScreen } from '../screens/DashboardScreen';
 import { ProductsScreen } from '../screens/product/ProductsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import {
+  AppLaunchRequest,
+  getProfileResourceForLaunchAction,
+  getTabForLaunchAction,
   SupplierResourceKey,
   SupplierResourceScreen,
 } from '../screens/profile/SupplierResourceScreen';
@@ -35,10 +38,12 @@ type ActiveSheet =
   | null;
 
 interface MainTabNavigatorProps {
+  launchRequest?: AppLaunchRequest | null;
   onLogout?: () => void;
 }
 
 export function MainTabNavigator({
+  launchRequest = null,
   onLogout = () => undefined,
 }: MainTabNavigatorProps) {
   const { theme, themePreference, setThemePreference } = useTheme();
@@ -51,6 +56,9 @@ export function MainTabNavigator({
   const [isProductDetailsVisible, setProductDetailsVisible] = useState(false);
   const [activeProfileResource, setActiveProfileResource] =
     useState<SupplierResourceKey | null>(null);
+  const [vehicleLaunchToken, setVehicleLaunchToken] = useState<number | null>(null);
+  const [productLaunchToken, setProductLaunchToken] = useState<number | null>(null);
+  const lastHandledLaunchIdRef = useRef<number | null>(null);
 
   const tabs = useMemo(
     () => [
@@ -79,11 +87,39 @@ export function MainTabNavigator({
   const currentLanguageLabel = availableLanguages[language];
 
   const openTab = (tab: AppTabKey) => {
+    setVehicleDetailsVisible(false);
+    setProductDetailsVisible(false);
     if (tab !== 'profile') {
       setActiveProfileResource(null);
     }
     setActiveTab(tab);
   };
+
+  useEffect(() => {
+    if (!launchRequest || lastHandledLaunchIdRef.current === launchRequest.id) {
+      return;
+    }
+
+    lastHandledLaunchIdRef.current = launchRequest.id;
+
+    const nextTab = getTabForLaunchAction(launchRequest.action);
+    const nextProfileResource = getProfileResourceForLaunchAction(
+      launchRequest.action,
+    );
+
+    setVehicleDetailsVisible(false);
+    setProductDetailsVisible(false);
+    setActiveTab(nextTab);
+    setActiveProfileResource(nextProfileResource);
+
+    if (launchRequest.action === 'addVehicle') {
+      setVehicleLaunchToken(launchRequest.id);
+    }
+
+    if (launchRequest.action === 'addProduct') {
+      setProductLaunchToken(launchRequest.id);
+    }
+  }, [launchRequest]);
 
   const closeSheet = () => {
     setActiveSheet(null);
@@ -99,12 +135,14 @@ export function MainTabNavigator({
       case 'vehicles':
         return (
           <VehiclesScreen
+            externalAddRequestToken={vehicleLaunchToken}
             onDetailVisibilityChange={setVehicleDetailsVisible}
           />
         );
       case 'products':
         return (
           <ProductsScreen
+            externalAddRequestToken={productLaunchToken}
             onDetailVisibilityChange={setProductDetailsVisible}
           />
         );
@@ -133,6 +171,7 @@ export function MainTabNavigator({
             onOpenAddresses={() => setActiveProfileResource('addresses')}
             onOpenOrders={() => setActiveProfileResource('orders')}
             onOpenReviews={() => setActiveProfileResource('reviews')}
+            onOpenFavourites={() => setActiveProfileResource('favourites')}
             onOpenDiscounts={() => setActiveProfileResource('discounts')}
             onOpenImages={() => setActiveProfileResource('images')}
             onOpenVehicles={() => openTab('vehicles')}

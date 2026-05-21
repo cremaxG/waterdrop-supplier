@@ -49,6 +49,7 @@ interface ProfileScreenProps {
   onOpenAddresses: () => void;
   onOpenOrders: () => void;
   onOpenReviews: () => void;
+  onOpenFavourites: () => void;
   onOpenDiscounts: () => void;
   onOpenImages: () => void;
   onOpenVehicles: () => void;
@@ -78,6 +79,7 @@ export function ProfileScreen({
   onOpenAddresses,
   onOpenOrders,
   onOpenReviews,
+  onOpenFavourites,
   onOpenDiscounts,
   onOpenImages,
   onOpenVehicles,
@@ -387,6 +389,12 @@ export function ProfileScreen({
             title={t('supplierResourcesReviewsTitle')}
             description={t('profileReviewsDescription')}
             onPress={onOpenReviews}
+          />
+          <ProfileActionRow
+            icon="heart"
+            title={t('supplierResourcesFavouritesTitle')}
+            description={t('profileFavouritesDescription')}
+            onPress={onOpenFavourites}
           />
           <ProfileActionRow
             icon="money"

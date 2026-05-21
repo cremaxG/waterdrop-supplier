@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_vehicle"
+        android:shortcutId="add_vehicle"
+        android:shortcutLongLabel="@string/shortcut_add_vehicle_long"
+        android:shortcutShortLabel="@string/shortcut_add_vehicle_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="watersupplier://shortcut/vehicles/add"
+            android:targetClass="com.watersupplier.MainActivity"
+            android:targetPackage="com.watersupplier" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_product"
+        android:shortcutId="add_product"
+        android:shortcutLongLabel="@string/shortcut_add_product_long"
+        android:shortcutShortLabel="@string/shortcut_add_product_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="watersupplier://shortcut/products/add"
+            android:targetClass="com.watersupplier.MainActivity"
+            android:targetPackage="com.watersupplier" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_orders"
+        android:shortcutId="view_orders"
+        android:shortcutLongLabel="@string/shortcut_view_orders_long"
+        android:shortcutShortLabel="@string/shortcut_view_orders_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="watersupplier://shortcut/profile/orders"
+            android:targetClass="com.watersupplier.MainActivity"
+            android:targetPackage="com.watersupplier" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_fleet"
+        android:shortcutId="open_fleet"
+        android:shortcutLongLabel="@string/shortcut_open_fleet_long"
+        android:shortcutShortLabel="@string/shortcut_open_fleet_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="watersupplier://shortcut/vehicles"
+            android:targetClass="com.watersupplier.MainActivity"
+            android:targetPackage="com.watersupplier" />
+    </shortcut>
+</shortcuts>

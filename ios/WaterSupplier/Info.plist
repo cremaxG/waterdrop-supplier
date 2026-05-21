@@ -24,6 +24,19 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.watersupplier.launch</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>watersupplier</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -56,5 +69,48 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeAdd</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Register a new fleet vehicle</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Add Vehicle</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.watersupplier.addVehicle</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeAdd</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Create a catalog product</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Add Product</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.watersupplier.addProduct</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeTask</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Open supplier orders</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>View Orders</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.watersupplier.orders</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeHome</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Go to fleet operations</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Open Fleet</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.watersupplier.fleet</string>
+		</dict>
+	</array>
 </dict>
 </plist>

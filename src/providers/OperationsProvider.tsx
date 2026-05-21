@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import ProductApi from '../service/productApi';
 import SupplierApi from '../service/supplierApi';
+import { syncHomeWidgetSummary } from '../native/homeWidget';
 import type { ProductRecord } from '../screens/product/ProductDetailsScreen';
 import type { VehicleRecord } from '../screens/vehicle/VehicleDetailsScreen';
 
@@ -304,6 +305,16 @@ export function OperationsProvider({
 
     loadOperations();
   }, []);
+
+  useEffect(() => {
+    syncHomeWidgetSummary({
+      vehicles: state.vehicles.length,
+      products: state.products.length,
+      pendingReviews: state.vehicles.filter(
+        vehicle => vehicle.reviewStatus === 'pending',
+      ).length,
+    });
+  }, [state.products.length, state.vehicles]);
 
   const refreshVehicles = async () => {
     const vehicleResponse = await SupplierApi.listVehicles();

@@ -34,6 +34,7 @@ const iconMap: Record<string, string> = {
   logout: '⇥',
   back: '‹',
   map: '⌖',
+  heart: '♥',
 };
 
 export interface AppIconProps {

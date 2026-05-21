@@ -15,12 +15,34 @@ export type SupplierResourceKey =
   | 'addresses'
   | 'orders'
   | 'reviews'
+  | 'favourites'
   | 'discounts'
   | 'images';
 
 interface SupplierResourceScreenProps {
   resourceKey: SupplierResourceKey;
   onBack: () => void;
+}
+
+interface FavouriteSupplierRecord {
+  id: string;
+  supplierId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+}
+
+interface FavouriteProductRecord {
+  id: string;
+  productId: string;
+  name: string;
+  price?: string;
+  category?: string;
+  type?: string;
+  unitLabel?: string;
 }
 
 function unwrapApiData<T>(response: T | { data?: T } | null | undefined): T | null {
@@ -107,6 +129,40 @@ function pickImageUrl(item: any) {
   return item.url ?? item.image_url ?? item.imageUrl ?? item.file_url ?? item.path ?? '';
 }
 
+function toNumber(value: any) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizeFavouriteSupplier(item: any): FavouriteSupplierRecord {
+  const supplier = item?.supplier ?? item;
+
+  return {
+    id: String(item?.id ?? supplier?.id ?? supplier?.supplier_id ?? `supplier-${Date.now()}`),
+    supplierId: String(supplier?.id ?? item?.supplier_id ?? '—'),
+    name: supplier?.name ?? item?.name ?? 'Saved supplier',
+    phone: supplier?.phone ?? item?.phone,
+    email: supplier?.email ?? item?.email,
+    city: supplier?.city ?? item?.city,
+    state: supplier?.state ?? item?.state,
+    country: supplier?.country ?? item?.country,
+  };
+}
+
+function normalizeFavouriteProduct(item: any): FavouriteProductRecord {
+  const product = item?.product ?? item;
+
+  return {
+    id: String(item?.id ?? product?.id ?? product?.product_id ?? `product-${Date.now()}`),
+    productId: String(product?.id ?? item?.product_id ?? '—'),
+    name: product?.name ?? item?.name ?? 'Saved product',
+    price: product?.price ?? item?.price,
+    category: product?.category ?? item?.category,
+    type: product?.type ?? item?.type,
+    unitLabel: product?.uom ?? product?.unitLabel ?? item?.uom ?? item?.unitLabel,
+  };
+}
+
 function getResourceMeta(resourceKey: SupplierResourceKey, t: (key: string) => string) {
   switch (resourceKey) {
     case 'addresses':
@@ -126,6 +182,12 @@ function getResourceMeta(resourceKey: SupplierResourceKey, t: (key: string) => s
         title: t('supplierResourcesReviewsTitle'),
         subtitle: t('supplierResourcesReviewsSubtitle'),
         icon: 'star',
+      };
+    case 'favourites':
+      return {
+        title: t('supplierResourcesFavouritesTitle'),
+        subtitle: t('supplierResourcesFavouritesSubtitle'),
+        icon: 'heart',
       };
     case 'discounts':
       return {
@@ -151,6 +213,8 @@ export function SupplierResourceScreen({
   const palette = useAppPalette();
   const [profile, setProfile] = useState<SupplierProfile | null>(null);
   const [items, setItems] = useState<any[]>([]);
+  const [favouriteSuppliers, setFavouriteSuppliers] = useState<FavouriteSupplierRecord[]>([]);
+  const [favouriteProducts, setFavouriteProducts] = useState<FavouriteProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -173,7 +237,25 @@ export function SupplierResourceScreen({
       }
 
       if (resourceKey === 'addresses') {
+        setFavouriteSuppliers([]);
+        setFavouriteProducts([]);
         setItems([nextProfile]);
+        return;
+      }
+
+      if (resourceKey === 'favourites') {
+        const [suppliersResponse, productsResponse] = await Promise.all([
+          SupplierApi.listFavouriteSuppliers(),
+          SupplierApi.listFavouriteProducts(),
+        ]);
+
+        setItems([]);
+        setFavouriteSuppliers(
+          extractCollection(suppliersResponse, 'data').map(normalizeFavouriteSupplier),
+        );
+        setFavouriteProducts(
+          extractCollection(productsResponse, 'data').map(normalizeFavouriteProduct),
+        );
         return;
       }
 
@@ -186,10 +268,14 @@ export function SupplierResourceScreen({
               ? await SupplierApi.listSupplierDiscounts(nextProfile.id, { limit: 20 })
               : await SupplierApi.listSupplierImages(nextProfile.id, { limit: 20 });
 
+      setFavouriteSuppliers([]);
+      setFavouriteProducts([]);
       const collection = extractCollection(response, resourceKey);
       setItems(collection);
     } catch (nextError: any) {
       setItems([]);
+      setFavouriteSuppliers([]);
+      setFavouriteProducts([]);
       setError(nextError?.message || t('supplierResourcesLoadFailed'));
     } finally {
       setLoading(false);
@@ -315,6 +401,8 @@ export function SupplierResourceScreen({
   };
 
   const renderReviewCard = (item: any, index: number) => {
+    const rating = toNumber(item.ratings);
+
     return (
       <View
         key={String(item.id ?? `review-${index}`)}
@@ -347,7 +435,7 @@ export function SupplierResourceScreen({
           >
             <AppIcon name="star" size={14} color={palette.accentStrong} />
             <AppText style={[styles.ratingText, { color: palette.accentStrong }]}>
-              {item.ratings ?? '—'}/5
+              {rating > 0 ? rating.toFixed(1) : '—'}/5
             </AppText>
           </View>
         </View>
@@ -358,6 +446,101 @@ export function SupplierResourceScreen({
         <AppText style={[styles.metaListText, { color: palette.muted }]}>
           {t('supplierResourcesUpdatedLabel')}: {formatDate(item.updated_at ?? item.created_at)}
         </AppText>
+      </View>
+    );
+  };
+
+  const renderFavouriteSupplierCard = (item: FavouriteSupplierRecord, index: number) => {
+    const location = [item.city, item.state, item.country].filter(Boolean).join(', ');
+
+    return (
+      <View
+        key={item.id || `favourite-supplier-${index}`}
+        style={[
+          styles.card,
+          {
+            backgroundColor: palette.surface,
+            borderColor: palette.border,
+            shadowColor: palette.shadow,
+          },
+        ]}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderCopy}>
+            <AppText style={[styles.cardTitle, { color: palette.text }]}>
+              {item.name || t('supplierResourcesFavouriteSupplierFallback')}
+            </AppText>
+            <AppText style={[styles.cardMeta, { color: palette.muted }]}>
+              {t('supplierResourcesSupplierIdLabel')}: {item.supplierId}
+            </AppText>
+          </View>
+          <View
+            style={[
+              styles.badge,
+              {
+                backgroundColor: palette.accentSoft,
+                borderColor: palette.accentSoftBorder,
+              },
+            ]}
+          >
+            <AppText style={[styles.badgeText, { color: palette.accentStrong }]}>
+              {t('supplierResourcesFavouriteBadge')}
+            </AppText>
+          </View>
+        </View>
+
+        <View style={styles.metaList}>
+          <AppText style={[styles.metaListText, { color: palette.muted }]}>
+            {t('supplierResourcesLocationLabel')}: {location || '—'}
+          </AppText>
+          <AppText style={[styles.metaListText, { color: palette.muted }]}>
+            {t('profilePhoneLabel')}: {item.phone || '—'}
+          </AppText>
+          <AppText style={[styles.metaListText, { color: palette.muted }]}>
+            {t('profileEmailLabel')}: {item.email || '—'}
+          </AppText>
+        </View>
+      </View>
+    );
+  };
+
+  const renderFavouriteProductCard = (item: FavouriteProductRecord, index: number) => {
+    const metaLabel = [item.category, item.type, item.unitLabel].filter(Boolean).join(' • ');
+
+    return (
+      <View
+        key={item.id || `favourite-product-${index}`}
+        style={[
+          styles.card,
+          {
+            backgroundColor: palette.surface,
+            borderColor: palette.border,
+            shadowColor: palette.shadow,
+          },
+        ]}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderCopy}>
+            <AppText style={[styles.cardTitle, { color: palette.text }]}>
+              {item.name || t('supplierResourcesFavouriteProductFallback')}
+            </AppText>
+            <AppText style={[styles.cardMeta, { color: palette.muted }]}>
+              {metaLabel || t('supplierResourcesSavedProductLabel')}
+            </AppText>
+          </View>
+          <AppText style={[styles.cardValue, { color: palette.text }]}>
+            {item.price ? formatCurrency(item.price) : '—'}
+          </AppText>
+        </View>
+
+        <View style={styles.metaList}>
+          <AppText style={[styles.metaListText, { color: palette.muted }]}>
+            {t('supplierResourcesProductIdLabel')}: {item.productId}
+          </AppText>
+          <AppText style={[styles.metaListText, { color: palette.muted }]}>
+            {t('supplierResourcesPriceLabel')}: {item.price ? formatCurrency(item.price) : '—'}
+          </AppText>
+        </View>
       </View>
     );
   };
@@ -485,7 +668,16 @@ export function SupplierResourceScreen({
     );
   };
 
-  const summaryCount = resourceKey === 'addresses' ? Number(Boolean(profile)) : items.length;
+  const reviewAverage =
+    resourceKey === 'reviews' && items.length > 0
+      ? items.reduce((sum, item) => sum + toNumber(item.ratings), 0) / items.length
+      : 0;
+  const summaryCount =
+    resourceKey === 'addresses'
+      ? Number(Boolean(profile))
+      : resourceKey === 'favourites'
+        ? favouriteSuppliers.length + favouriteProducts.length
+        : items.length;
   const activeDiscountsCount =
     resourceKey === 'discounts'
       ? items.filter(item => Boolean(item.active)).length
@@ -494,6 +686,8 @@ export function SupplierResourceScreen({
     resourceKey === 'images'
       ? new Set(items.map(item => item.type).filter(Boolean)).size
       : 0;
+  const favouriteSuppliersCount = favouriteSuppliers.length;
+  const favouriteProductsCount = favouriteProducts.length;
 
   const renderCards = () => {
     if (resourceKey === 'addresses') {
@@ -506,6 +700,74 @@ export function SupplierResourceScreen({
 
     if (resourceKey === 'reviews') {
       return items.map(renderReviewCard);
+    }
+
+    if (resourceKey === 'favourites') {
+      return (
+        <>
+          <View style={styles.sectionBlock}>
+            <AppText style={[styles.subsectionTitle, { color: palette.text }]}>
+              {t('supplierResourcesFavouriteSuppliersTitle')}
+            </AppText>
+            <AppText style={[styles.subsectionBody, { color: palette.muted }]}>
+              {t('supplierResourcesFavouriteSuppliersSubtitle')}
+            </AppText>
+            {favouriteSuppliersCount > 0 ? (
+              <View style={styles.stack}>
+                {favouriteSuppliers.map(renderFavouriteSupplierCard)}
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.inlineEmptyCard,
+                  {
+                    backgroundColor: palette.surfaceSoft,
+                    borderColor: palette.border,
+                  },
+                ]}
+              >
+                <AppText style={[styles.inlineEmptyTitle, { color: palette.text }]}>
+                  {t('supplierResourcesFavouriteSuppliersEmptyTitle')}
+                </AppText>
+                <AppText style={[styles.inlineEmptyBody, { color: palette.muted }]}>
+                  {t('supplierResourcesFavouriteSuppliersEmptyBody')}
+                </AppText>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.sectionBlock}>
+            <AppText style={[styles.subsectionTitle, { color: palette.text }]}>
+              {t('supplierResourcesFavouriteProductsTitle')}
+            </AppText>
+            <AppText style={[styles.subsectionBody, { color: palette.muted }]}>
+              {t('supplierResourcesFavouriteProductsSubtitle')}
+            </AppText>
+            {favouriteProductsCount > 0 ? (
+              <View style={styles.stack}>
+                {favouriteProducts.map(renderFavouriteProductCard)}
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.inlineEmptyCard,
+                  {
+                    backgroundColor: palette.surfaceSoft,
+                    borderColor: palette.border,
+                  },
+                ]}
+              >
+                <AppText style={[styles.inlineEmptyTitle, { color: palette.text }]}>
+                  {t('supplierResourcesFavouriteProductsEmptyTitle')}
+                </AppText>
+                <AppText style={[styles.inlineEmptyBody, { color: palette.muted }]}>
+                  {t('supplierResourcesFavouriteProductsEmptyBody')}
+                </AppText>
+              </View>
+            )}
+          </View>
+        </>
+      );
     }
 
     if (resourceKey === 'discounts') {
@@ -573,10 +835,14 @@ export function SupplierResourceScreen({
             ]}
           >
             <AppText style={[styles.summaryValue, { color: palette.text }]}>
-              {summaryCount}
+              {resourceKey === 'reviews' && reviewAverage > 0
+                ? reviewAverage.toFixed(1)
+                : summaryCount}
             </AppText>
             <AppText style={[styles.summaryLabel, { color: palette.muted }]}>
-              {t('supplierResourcesCountLabel')}
+              {resourceKey === 'reviews'
+                ? t('supplierResourcesAverageLabel')
+                : t('supplierResourcesCountLabel')}
             </AppText>
           </View>
           <View
@@ -589,17 +855,49 @@ export function SupplierResourceScreen({
             ]}
           >
             <AppText style={[styles.summaryValue, { color: palette.text }]}>
-              {resourceKey === 'discounts' ? activeDiscountsCount : resourceKey === 'images' ? imageTypesCount : '—'}
+              {resourceKey === 'discounts'
+                ? activeDiscountsCount
+                : resourceKey === 'images'
+                  ? imageTypesCount
+                  : resourceKey === 'favourites'
+                    ? favouriteProductsCount
+                    : resourceKey === 'reviews'
+                      ? items.length
+                      : '—'}
             </AppText>
             <AppText style={[styles.summaryLabel, { color: palette.muted }]}>
               {resourceKey === 'discounts'
                 ? t('supplierResourcesActiveLabel')
+                : resourceKey === 'favourites'
+                  ? t('supplierResourcesSavedProductsLabel')
+                  : resourceKey === 'reviews'
+                    ? t('supplierResourcesCountLabel')
                 : resourceKey === 'images'
                   ? t('supplierResourcesTypesLabel')
                   : t('supplierResourcesUpdatedLabel')}
             </AppText>
           </View>
         </View>
+        {resourceKey === 'favourites' ? (
+          <View style={styles.summaryRowSecondary}>
+            <View
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: palette.surfaceSoft,
+                  borderColor: palette.border,
+                },
+              ]}
+            >
+              <AppText style={[styles.summaryValue, { color: palette.text }]}>
+                {favouriteSuppliersCount}
+              </AppText>
+              <AppText style={[styles.summaryLabel, { color: palette.muted }]}>
+                {t('supplierResourcesSavedSuppliersLabel')}
+              </AppText>
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {loading ? (
@@ -640,7 +938,7 @@ export function SupplierResourceScreen({
             variant="primary"
           />
         </View>
-      ) : summaryCount === 0 ? (
+      ) : summaryCount === 0 && resourceKey !== 'favourites' ? (
         <View
           style={[
             styles.stateCard,
@@ -721,6 +1019,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  summaryRowSecondary: {
+    marginTop: 12,
+  },
   summaryCard: {
     flex: 1,
     borderWidth: 1,
@@ -738,6 +1039,17 @@ const styles = StyleSheet.create({
   },
   stack: {
     gap: 14,
+  },
+  sectionBlock: {
+    gap: 12,
+  },
+  subsectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  subsectionBody: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   card: {
     borderWidth: 1,
@@ -870,5 +1182,19 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 16,
     textAlign: 'center',
+  },
+  inlineEmptyCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    gap: 8,
+  },
+  inlineEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  inlineEmptyBody: {
+    fontSize: 13,
+    lineHeight: 19,
   },
 });

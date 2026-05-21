@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Linking } from 'react-native';
 import { AuthScreen } from '../screens/auth/AuthScreen';
+import {
+  AppLaunchRequest,
+  parseLaunchRequest,
+} from './launchActions';
 import {
   clearTempToken,
   getTempToken,
@@ -11,7 +16,35 @@ export function AppNavigator() {
   const [tempToken, setSessionToken] = useState<string | null>(() =>
     getTempToken(),
   );
+  const [launchRequest, setLaunchRequest] = useState<AppLaunchRequest | null>(null);
   const isSignedIn = Boolean(tempToken);
+
+  useEffect(() => {
+    const applyLaunchUrl = (url: string | null) => {
+      if (!url) {
+        return;
+      }
+
+      const parsedRequest = parseLaunchRequest(url);
+      if (parsedRequest) {
+        setLaunchRequest(parsedRequest);
+      }
+    };
+
+    Linking.getInitialURL()
+      .then(applyLaunchUrl)
+      .catch(error => {
+        console.warn('Unable to read initial launch URL', error);
+      });
+
+    const subscription = Linking.addEventListener('url', event => {
+      applyLaunchUrl(event.url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   if (!isSignedIn) {
     return (
@@ -30,6 +63,7 @@ export function AppNavigator() {
 
   return (
     <MainTabNavigator
+      launchRequest={launchRequest}
       onLogout={() => {
         clearTempToken();
         setSessionToken(null);

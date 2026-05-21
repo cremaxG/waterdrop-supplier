@@ -1,3 +1,21 @@
 <resources>
     <string name="app_name">WaterSupplier</string>
+    <string name="shortcut_add_vehicle_short">Add vehicle</string>
+    <string name="shortcut_add_vehicle_long">Add a new fleet vehicle</string>
+    <string name="shortcut_add_product_short">Add product</string>
+    <string name="shortcut_add_product_long">Add a new catalog product</string>
+    <string name="shortcut_view_orders_short">View orders</string>
+    <string name="shortcut_view_orders_long">Open supplier orders</string>
+    <string name="shortcut_open_fleet_short">Open fleet</string>
+    <string name="shortcut_open_fleet_long">Review your fleet dashboard</string>
+    <string name="widget_title">WaterDrop Hub</string>
+    <string name="widget_subtitle">Fast access to your fleet, catalog, and orders</string>
+    <string name="widget_metric_vehicles">Vehicles</string>
+    <string name="widget_metric_products">Products</string>
+    <string name="widget_metric_pending">Pending review</string>
+    <string name="widget_action_add_vehicle">Add Vehicle</string>
+    <string name="widget_action_add_product">Add Product</string>
+    <string name="widget_action_orders">View Orders</string>
+    <string name="widget_action_fleet">Open Fleet</string>
+    <string name="widget_description">WaterDrop supplier quick access widget</string>
 </resources>

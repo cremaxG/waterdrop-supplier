@@ -21,6 +21,7 @@ import {
 } from './ProductDetailsScreen';
 
 interface ProductsScreenProps {
+  externalAddRequestToken?: number | null;
   onDetailVisibilityChange?: (isVisible: boolean) => void;
 }
 
@@ -69,6 +70,7 @@ function getProductVehicleUnits(product: ProductRecord) {
 }
 
 export function ProductsScreen({
+  externalAddRequestToken = null,
   onDetailVisibilityChange,
 }: ProductsScreenProps) {
   const { t } = useTranslation();
@@ -85,6 +87,7 @@ export function ProductsScreen({
   const [isAddProductVisible, setAddProductVisible] = useState(false);
   const detailTranslateX = useRef(new Animated.Value(width)).current;
   const addTranslateX = useRef(new Animated.Value(width)).current;
+  const lastHandledExternalAddTokenRef = useRef<number | null>(null);
 
   const selectedProduct = useMemo(
     () => products.find(product => product.id === selectedProductId) ?? null,
@@ -121,6 +124,30 @@ export function ProductsScreen({
       addTranslateX.setValue(width);
     }
   }, [addTranslateX, detailTranslateX, isAddProductVisible, selectedProductId, width]);
+
+  useEffect(() => {
+    if (
+      !externalAddRequestToken ||
+      lastHandledExternalAddTokenRef.current === externalAddRequestToken
+    ) {
+      return;
+    }
+
+    lastHandledExternalAddTokenRef.current = externalAddRequestToken;
+    setSelectedProductId(null);
+    addTranslateX.setValue(width);
+    setAddProductVisible(true);
+    onDetailVisibilityChange?.(true);
+
+    requestAnimationFrame(() => {
+      Animated.timing(addTranslateX, {
+        toValue: 0,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [addTranslateX, externalAddRequestToken, onDetailVisibilityChange, width]);
 
   const openProductDetails = (productId: string) => {
     detailTranslateX.setValue(width);

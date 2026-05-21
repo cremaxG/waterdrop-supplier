@@ -351,13 +351,15 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
       'Check licenses, permits, and compliance records in one place.',
     profileResourcesTitle: 'Supplier resources',
     profileResourcesSubtitle:
-      'Review supplier-side addresses, order history, reviews, discounts, and image assets.',
+      'Review supplier-side addresses, orders, reviews, favourites, discounts, and image assets.',
     profileAddressesDescription:
       'See the registered supplier address and location data used across the workspace.',
     profileOrdersDescription:
       'Track supplier-linked order history and previously ordered catalog items.',
     profileReviewsDescription:
       'Monitor customer feedback, ratings, and recent review activity.',
+    profileFavouritesDescription:
+      'See favourite suppliers and products saved on the current account.',
     profileDiscountsDescription:
       'Inspect active and scheduled supplier discount campaigns.',
     profileImagesDescription:
@@ -451,16 +453,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     supplierResourcesRetryButton: 'Retry',
     supplierResourcesEmptyLabel: 'No records are available in this section yet.',
     supplierResourcesCountLabel: 'Records',
+    supplierResourcesAverageLabel: 'Average rating',
     supplierResourcesTypesLabel: 'Types',
     supplierResourcesPrimaryLabel: 'Primary',
     supplierResourcesActiveLabel: 'Active',
     supplierResourcesInactiveLabel: 'Inactive',
+    supplierResourcesFavouriteBadge: 'Saved',
+    supplierResourcesSavedSuppliersLabel: 'Suppliers',
+    supplierResourcesSavedProductsLabel: 'Products',
     supplierResourcesUpdatedLabel: 'Updated',
     supplierResourcesUserLabel: 'User',
     supplierResourcesQuantityLabel: 'Quantity',
     supplierResourcesMinimumLabel: 'Minimum amount',
     supplierResourcesDurationLabel: 'Duration',
     supplierResourcesCoordinatesLabel: 'Coordinates',
+    supplierResourcesLocationLabel: 'Location',
+    supplierResourcesSupplierIdLabel: 'Supplier ID',
+    supplierResourcesProductIdLabel: 'Product ID',
+    supplierResourcesPriceLabel: 'Price',
     supplierResourcesOrderLabel: 'Order',
     supplierResourcesOrderHistoryLabel: 'Supplier order history',
     supplierResourcesReviewLabel: 'Review',
@@ -479,6 +489,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     supplierResourcesReviewsTitle: 'Reviews',
     supplierResourcesReviewsSubtitle:
       'Customer feedback and ratings associated with this supplier.',
+    supplierResourcesFavouritesTitle: 'Favourites',
+    supplierResourcesFavouritesSubtitle:
+      'Saved supplier and product entries linked to the current account.',
+    supplierResourcesFavouriteSuppliersTitle: 'Favourite suppliers',
+    supplierResourcesFavouriteSuppliersSubtitle:
+      'Suppliers this account has saved for quick access.',
+    supplierResourcesFavouriteSuppliersEmptyTitle: 'No favourite suppliers',
+    supplierResourcesFavouriteSuppliersEmptyBody:
+      'Saved suppliers will appear here when the account starts using favourites.',
+    supplierResourcesFavouriteSupplierFallback: 'Saved supplier',
+    supplierResourcesFavouriteProductsTitle: 'Favourite products',
+    supplierResourcesFavouriteProductsSubtitle:
+      'Products this account has marked for quick access.',
+    supplierResourcesFavouriteProductsEmptyTitle: 'No favourite products',
+    supplierResourcesFavouriteProductsEmptyBody:
+      'Saved products will appear here when the account starts using favourites.',
+    supplierResourcesFavouriteProductFallback: 'Saved product',
+    supplierResourcesSavedProductLabel: 'Saved product',
     supplierResourcesDiscountsTitle: 'Supplier discounts',
     supplierResourcesDiscountsSubtitle:
       'Campaign rules, active offers, and upcoming supplier discounts.',
@@ -830,13 +858,15 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
       'लाइसेंस, परमिट और अनुपालन रिकॉर्ड एक ही जगह देखें।',
     profileResourcesTitle: 'सप्लायर संसाधन',
     profileResourcesSubtitle:
-      'सप्लायर के पते, ऑर्डर इतिहास, रिव्यू, डिस्काउंट और इमेज एसेट्स देखें।',
+      'सप्लायर के पते, ऑर्डर, रिव्यू, पसंदीदा, डिस्काउंट और इमेज एसेट्स देखें।',
     profileAddressesDescription:
       'वर्कस्पेस में उपयोग होने वाले पंजीकृत सप्लायर पते और लोकेशन डेटा देखें।',
     profileOrdersDescription:
       'सप्लायर से जुड़े ऑर्डर इतिहास और पहले ऑर्डर किए गए कैटलॉग आइटम ट्रैक करें।',
     profileReviewsDescription:
       'ग्राहक फीडबैक, रेटिंग और हाल की रिव्यू गतिविधि मॉनिटर करें।',
+    profileFavouritesDescription:
+      'वर्तमान खाते में सेव किए गए पसंदीदा सप्लायर और उत्पाद देखें।',
     profileDiscountsDescription:
       'सक्रिय और तय किए गए सप्लायर डिस्काउंट अभियान देखें।',
     profileImagesDescription:
@@ -930,16 +960,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     supplierResourcesRetryButton: 'फिर से प्रयास करें',
     supplierResourcesEmptyLabel: 'इस सेक्शन में अभी कोई रिकॉर्ड उपलब्ध नहीं है।',
     supplierResourcesCountLabel: 'रिकॉर्ड',
+    supplierResourcesAverageLabel: 'औसत रेटिंग',
     supplierResourcesTypesLabel: 'प्रकार',
     supplierResourcesPrimaryLabel: 'मुख्य',
     supplierResourcesActiveLabel: 'सक्रिय',
     supplierResourcesInactiveLabel: 'निष्क्रिय',
+    supplierResourcesFavouriteBadge: 'सेव',
+    supplierResourcesSavedSuppliersLabel: 'सप्लायर',
+    supplierResourcesSavedProductsLabel: 'उत्पाद',
     supplierResourcesUpdatedLabel: 'अपडेट',
     supplierResourcesUserLabel: 'उपयोगकर्ता',
     supplierResourcesQuantityLabel: 'मात्रा',
     supplierResourcesMinimumLabel: 'न्यूनतम राशि',
     supplierResourcesDurationLabel: 'अवधि',
     supplierResourcesCoordinatesLabel: 'निर्देशांक',
+    supplierResourcesLocationLabel: 'स्थान',
+    supplierResourcesSupplierIdLabel: 'सप्लायर आईडी',
+    supplierResourcesProductIdLabel: 'उत्पाद आईडी',
+    supplierResourcesPriceLabel: 'कीमत',
     supplierResourcesOrderLabel: 'ऑर्डर',
     supplierResourcesOrderHistoryLabel: 'सप्लायर ऑर्डर इतिहास',
     supplierResourcesReviewLabel: 'रिव्यू',
@@ -958,6 +996,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     supplierResourcesReviewsTitle: 'रिव्यू',
     supplierResourcesReviewsSubtitle:
       'इस सप्लायर से जुड़े ग्राहक फीडबैक और रेटिंग।',
+    supplierResourcesFavouritesTitle: 'पसंदीदा',
+    supplierResourcesFavouritesSubtitle:
+      'वर्तमान खाते से जुड़े सेव किए गए सप्लायर और उत्पाद।',
+    supplierResourcesFavouriteSuppliersTitle: 'पसंदीदा सप्लायर',
+    supplierResourcesFavouriteSuppliersSubtitle:
+      'वे सप्लायर जिन्हें इस खाते ने जल्दी पहुंच के लिए सेव किया है।',
+    supplierResourcesFavouriteSuppliersEmptyTitle: 'कोई पसंदीदा सप्लायर नहीं',
+    supplierResourcesFavouriteSuppliersEmptyBody:
+      'जब यह खाता favourites का उपयोग करेगा, सेव किए गए सप्लायर यहाँ दिखेंगे।',
+    supplierResourcesFavouriteSupplierFallback: 'सेव किया गया सप्लायर',
+    supplierResourcesFavouriteProductsTitle: 'पसंदीदा उत्पाद',
+    supplierResourcesFavouriteProductsSubtitle:
+      'वे उत्पाद जिन्हें इस खाते ने जल्दी पहुंच के लिए मार्क किया है।',
+    supplierResourcesFavouriteProductsEmptyTitle: 'कोई पसंदीदा उत्पाद नहीं',
+    supplierResourcesFavouriteProductsEmptyBody:
+      'जब यह खाता favourites का उपयोग करेगा, सेव किए गए उत्पाद यहाँ दिखेंगे।',
+    supplierResourcesFavouriteProductFallback: 'सेव किया गया उत्पाद',
+    supplierResourcesSavedProductLabel: 'सेव किया गया उत्पाद',
     supplierResourcesDiscountsTitle: 'सप्लायर डिस्काउंट',
     supplierResourcesDiscountsSubtitle:
       'कैंपेन नियम, सक्रिय ऑफ़र और आने वाले सप्लायर डिस्काउंट।',

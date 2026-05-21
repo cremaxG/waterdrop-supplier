@@ -60,10 +60,12 @@ function extractApiErrorMessage(response: any) {
 }
 
 interface VehiclesScreenProps {
+  externalAddRequestToken?: number | null;
   onDetailVisibilityChange?: (isVisible: boolean) => void;
 }
 
 export function VehiclesScreen({
+  externalAddRequestToken = null,
   onDetailVisibilityChange,
 }: VehiclesScreenProps) {
   const { t } = useTranslation();
@@ -87,6 +89,7 @@ export function VehiclesScreen({
   const historyTranslateX = useRef(new Animated.Value(width)).current;
   const orderTranslateX = useRef(new Animated.Value(width)).current;
   const addVehicleTranslateX = useRef(new Animated.Value(width)).current;
+  const lastHandledExternalAddTokenRef = useRef<number | null>(null);
 
   const selectedVehicle = useMemo(
     () => vehicles.find(vehicle => vehicle.id === selectedVehicleId) ?? null,
@@ -168,6 +171,37 @@ export function VehiclesScreen({
     isAddVehicleVisible,
     orderTranslateX,
     selectedVehicleId,
+    width,
+  ]);
+
+  useEffect(() => {
+    if (
+      !externalAddRequestToken ||
+      lastHandledExternalAddTokenRef.current === externalAddRequestToken
+    ) {
+      return;
+    }
+
+    lastHandledExternalAddTokenRef.current = externalAddRequestToken;
+    setSelectedVehicleId(null);
+    setSelectedHistoryItemId(null);
+    setHistoryScreenVisible(false);
+    addVehicleTranslateX.setValue(width);
+    setAddVehicleVisible(true);
+    onDetailVisibilityChange?.(true);
+
+    requestAnimationFrame(() => {
+      Animated.timing(addVehicleTranslateX, {
+        toValue: 0,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [
+    addVehicleTranslateX,
+    externalAddRequestToken,
+    onDetailVisibilityChange,
     width,
   ]);
 
