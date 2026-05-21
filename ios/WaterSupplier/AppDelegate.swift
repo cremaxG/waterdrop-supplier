@@ -7,7 +7,6 @@ import RCTLinkingManager
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
   var window: UIWindow?
-  private var pendingShortcutURL: URL?
 
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
@@ -16,8 +15,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
-      pendingShortcutURL = Self.url(for: shortcutItem)
+    var reactLaunchOptions = launchOptions ?? [:]
+
+    if
+      let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem,
+      let shortcutURL = Self.url(for: shortcutItem)
+    {
+      reactLaunchOptions[.url] = shortcutURL
     }
 
     let delegate = ReactNativeDelegate()
@@ -32,14 +36,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     factory.startReactNative(
       withModuleName: "WaterSupplier",
       in: window,
-      launchOptions: launchOptions
+      launchOptions: reactLaunchOptions
     )
-
-    if let shortcutURL = pendingShortcutURL {
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-        _ = RCTLinkingManager.application(application, open: shortcutURL, options: [:])
-      }
-    }
 
     return true
   }

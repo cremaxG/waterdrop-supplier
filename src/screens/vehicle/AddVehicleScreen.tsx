@@ -10,6 +10,8 @@ export interface NewVehicleDraft {
   name: string;
   phone: string;
   email: string;
+  capacity: string;
+  driverLicenseNumber: string;
 }
 
 interface AddVehicleScreenProps {
@@ -28,6 +30,8 @@ export function AddVehicleScreen({
     name: '',
     phone: '',
     email: '',
+    capacity: '',
+    driverLicenseNumber: '',
   });
 
   const isValid = useMemo(
@@ -36,7 +40,8 @@ export function AddVehicleScreen({
         draft.vehicleNumber,
         draft.name,
         draft.phone,
-        draft.email,
+        draft.capacity,
+        draft.driverLicenseNumber,
       ].every(value => value.trim().length > 0) &&
       draft.phone.replace(/\D/g, '').length >= 10,
     [draft],
@@ -121,8 +126,26 @@ export function AddVehicleScreen({
           <AppInput
             value={draft.email}
             onChangeText={value => updateField('email', value)}
-            placeholder={t('vehicleAddEmailPlaceholder')}
+            placeholder="Vehicle driver email (optional)"
             keyboardType="email-address"
+          />
+        </View>
+      </VehicleSectionCard>
+
+      <VehicleSectionCard
+        title="Vehicle capacity and licence"
+        subtitle="Capture the load capacity and the driver licence number for review."
+      >
+        <View style={styles.stack}>
+          <AppInput
+            value={draft.capacity}
+            onChangeText={value => updateField('capacity', value)}
+            placeholder="Vehicle load capacity"
+          />
+          <AppInput
+            value={draft.driverLicenseNumber}
+            onChangeText={value => updateField('driverLicenseNumber', value)}
+            placeholder="Vehicle driver licence number"
           />
         </View>
       </VehicleSectionCard>

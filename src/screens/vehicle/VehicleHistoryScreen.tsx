@@ -11,6 +11,13 @@ import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
 import { VehicleRecord } from './VehicleDetailsScreen';
 
+type HistoryFilterKey =
+  | 'all'
+  | 'delivered'
+  | 'cancelled'
+  | 'confirmed'
+  | 'out_for_delivery';
+
 interface VehicleHistoryScreenProps {
   vehicle: VehicleRecord;
   onBack: () => void;
@@ -24,6 +31,7 @@ export function VehicleHistoryScreen({
 }: VehicleHistoryScreenProps) {
   const { t } = useTranslation();
   const palette = useAppPalette();
+  const [selectedFilter, setSelectedFilter] = React.useState<HistoryFilterKey>('all');
 
   const historySummary = useMemo(() => {
     const tripCount = vehicle.history.length;
@@ -44,6 +52,30 @@ export function VehicleHistoryScreen({
       bestRoute: bestRoute?.route ?? '-',
     };
   }, [vehicle.history]);
+
+  const filteredHistory = useMemo(() => {
+    if (selectedFilter === 'all') {
+      return vehicle.history;
+    }
+
+    return vehicle.history.filter(item => {
+      const normalizedStatus = item.completionStatus.trim().toLowerCase();
+
+      if (selectedFilter === 'out_for_delivery') {
+        return normalizedStatus === 'out for delivery';
+      }
+
+      return normalizedStatus === selectedFilter;
+    });
+  }, [selectedFilter, vehicle.history]);
+
+  const filterOptions: Array<{ key: HistoryFilterKey; label: string }> = [
+    { key: 'all', label: 'All' },
+    { key: 'delivered', label: 'Delivered' },
+    { key: 'cancelled', label: 'Cancelled' },
+    { key: 'confirmed', label: 'Confirmed' },
+    { key: 'out_for_delivery', label: 'Out for delivery' },
+  ];
 
   return (
     <ScrollView
@@ -117,15 +149,52 @@ export function VehicleHistoryScreen({
         title={t('vehicleHistoryTimelineTitle')}
         subtitle={t('vehicleHistoryTimelineSubtitle')}
       >
+        <View style={styles.filterRow}>
+          {filterOptions.map(option => (
+            <Pressable
+              key={option.key}
+              onPress={() => setSelectedFilter(option.key)}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor:
+                    selectedFilter === option.key
+                      ? palette.accentSoft
+                      : palette.surfaceSoft,
+                  borderColor:
+                    selectedFilter === option.key
+                      ? palette.accentSoftBorder
+                      : palette.border,
+                },
+              ]}
+            >
+              <AppText
+                style={[
+                  styles.filterText,
+                  {
+                    color:
+                      selectedFilter === option.key
+                        ? palette.accentStrong
+                        : palette.muted,
+                  },
+                ]}
+              >
+                {option.label}
+              </AppText>
+            </Pressable>
+          ))}
+        </View>
         <View style={styles.historyList}>
-          {vehicle.history.length > 0 ? (
-            vehicle.history.map(item => (
+          {filteredHistory.length > 0 ? (
+            filteredHistory.map(item => (
               <VehicleHistoryRow
-                key={`${vehicle.id}-${item.route}-${item.time}`}
-                route={item.route}
+                key={`${vehicle.id}-${item.id}-${item.time}`}
+                orderNumber={item.orderNumber ?? item.id}
+                confirmationLocation={item.confirmationLocation ?? item.route}
+                deliveryLocation={item.deliveryLocation ?? item.stopAddress}
+                status={item.completionStatus}
                 time={item.time}
-                orders={item.orders}
-                earnings={item.earnings}
+                paymentAmount={item.orderValue}
                 onPress={() => onOpenHistoryItem(item.id)}
               />
             ))
@@ -199,6 +268,22 @@ const styles = StyleSheet.create({
   },
   historyList: {
     gap: 12,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
+  filterChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   emptyText: {
     fontSize: 14,

@@ -23,6 +23,9 @@ export interface VehicleProductItem {
 export interface VehicleHistoryItem {
   id: string;
   route: string;
+  orderNumber?: string;
+  confirmationLocation?: string;
+  deliveryLocation?: string;
   time: string;
   orders: string;
   earnings: string;
@@ -45,6 +48,8 @@ export interface VehicleRecord {
   currentLocation: string;
   driverName: string;
   driverPhone: string;
+  driverEmail?: string;
+  driverLicenseNumber?: string;
   driverRating: string;
   shiftWindow: string;
   earningsToday: string;
@@ -237,6 +242,22 @@ export function VehicleDetailsScreen({
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
               {vehicle.driverPhone}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              Driver email
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {vehicle.driverEmail || '—'}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              Driver licence number
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {vehicle.driverLicenseNumber || '—'}
             </AppText>
           </View>
           <View style={styles.detailRow}>

@@ -49,10 +49,10 @@ export function AppNavigator() {
   if (!isSignedIn) {
     return (
       <AuthScreen
-        onSignIn={(phoneNumber, country) => {
-          const nextTempToken = `temp_${country.code}_${phoneNumber}_${Date.now()}`;
+        onSignIn={identifier => {
+          const nextTempToken = `temp_${identifier}_${Date.now()}`;
           console.log(
-            `Signing in with ${country.dialCode}${phoneNumber} using temp token ${nextTempToken}`,
+            `Signing in as ${identifier} using temp token ${nextTempToken}`,
           );
           setTempToken(nextTempToken);
           setSessionToken(nextTempToken);

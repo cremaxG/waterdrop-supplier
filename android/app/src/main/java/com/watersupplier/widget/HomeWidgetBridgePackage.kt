@@ -8,7 +8,10 @@ import com.facebook.react.uimanager.ViewManager
 class HomeWidgetBridgePackage : ReactPackage {
   override fun createNativeModules(
     reactContext: ReactApplicationContext,
-  ): List<NativeModule> = listOf(HomeWidgetBridgeModule(reactContext))
+  ): List<NativeModule> = listOf(
+    HomeWidgetBridgeModule(reactContext),
+    AppShortcutsBridgeModule(reactContext),
+  )
 
   override fun createViewManagers(
     reactContext: ReactApplicationContext,

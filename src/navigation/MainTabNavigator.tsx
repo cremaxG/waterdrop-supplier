@@ -15,14 +15,16 @@ import { DashboardScreen } from '../screens/DashboardScreen';
 import { ProductsScreen } from '../screens/product/ProductsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import {
-  AppLaunchRequest,
-  getProfileResourceForLaunchAction,
-  getTabForLaunchAction,
   SupplierResourceKey,
   SupplierResourceScreen,
 } from '../screens/profile/SupplierResourceScreen';
 import { VehiclesScreen } from '../screens/vehicle/VehiclesScreen';
 import { ThemePreference } from '../theme';
+import {
+  AppLaunchRequest,
+  getProfileResourceForLaunchAction,
+  getTabForLaunchAction,
+} from './launchActions';
 import { AppTabKey } from './types';
 
 type ActiveSheet =

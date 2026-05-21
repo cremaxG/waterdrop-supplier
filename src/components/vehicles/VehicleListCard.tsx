@@ -7,6 +7,8 @@ interface VehicleListCardProps {
   name: string;
   status: string;
   statusTone?: 'success' | 'warning' | 'pending';
+  driverLabel: string;
+  driverValue: string;
   capacityLabel: string;
   capacityValue: string;
   routeLabel: string;
@@ -21,6 +23,8 @@ export function VehicleListCard({
   name,
   status,
   statusTone = 'success',
+  driverLabel,
+  driverValue,
   capacityLabel,
   capacityValue,
   routeLabel,
@@ -91,20 +95,29 @@ export function VehicleListCard({
       <View style={styles.metaRow}>
         <View style={styles.metaBlock}>
           <AppText style={[styles.metaLabel, { color: palette.muted }]}>
+            {driverLabel}
+          </AppText>
+          <AppText style={[styles.metaValue, { color: palette.text }]}>
+            {driverValue}
+          </AppText>
+        </View>
+        <View style={styles.metaBlock}>
+          <AppText style={[styles.metaLabel, { color: palette.muted }]}>
             {capacityLabel}
           </AppText>
           <AppText style={[styles.metaValue, { color: palette.text }]}>
             {capacityValue}
           </AppText>
         </View>
-        <View style={styles.metaBlock}>
-          <AppText style={[styles.metaLabel, { color: palette.muted }]}>
-            {routeLabel}
-          </AppText>
-          <AppText style={[styles.metaValue, { color: palette.text }]}>
-            {routeValue}
-          </AppText>
-        </View>
+      </View>
+
+      <View style={styles.routeRow}>
+        <AppText style={[styles.metaLabel, { color: palette.muted }]}>
+          {routeLabel}
+        </AppText>
+        <AppText style={[styles.routeValue, { color: palette.text }]}>
+          {routeValue}
+        </AppText>
       </View>
 
       <View
@@ -193,6 +206,13 @@ const styles = StyleSheet.create({
   },
   metaValue: {
     fontSize: 16,
+    fontWeight: '700',
+  },
+  routeRow: {
+    marginBottom: 14,
+  },
+  routeValue: {
+    fontSize: 15,
     fontWeight: '700',
   },
   locationRow: {

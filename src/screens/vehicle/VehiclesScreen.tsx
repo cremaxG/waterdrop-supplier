@@ -20,6 +20,7 @@ import { useOperations } from '../../providers/OperationsProvider';
 import { useTranslation } from '../../providers/AppProviders';
 import SupplierApi from '../../service/supplierApi';
 import type { SupplierProfile } from '../../service/supplierApi';
+import { setStoredVehicleMetadata } from '../../storage/vehicleMetadata';
 import { AddVehicleScreen, NewVehicleDraft } from './AddVehicleScreen';
 import { VehicleHistoryScreen } from './VehicleHistoryScreen';
 import { VehicleHistoryOrderScreen } from './VehicleHistoryOrderScreen';
@@ -369,18 +370,26 @@ export function VehiclesScreen({
       }
 
       const nextVehicleId = String(response.id ?? `vehicle-${Date.now()}`);
+      setStoredVehicleMetadata(nextVehicleId, {
+        capacity: draft.capacity.trim(),
+        driverEmail: draft.email.trim(),
+        driverLicenseNumber: draft.driverLicenseNumber.trim(),
+        driverName: 'Assigned driver',
+      });
 
       const newVehicle: VehicleRecord = {
         id: nextVehicleId,
         name: response.name ?? draft.name.trim(),
         route: response.vehicle_number ?? draft.vehicleNumber.trim(),
-        capacity: 'N/A',
+        capacity: draft.capacity.trim(),
         currentLocation:
           [response.lat ?? supplierLat, response.lng ?? supplierLng]
             .filter(Boolean)
             .join(', ') || 'Location pending',
-        driverName: '',
+        driverName: 'Assigned driver',
         driverPhone: response.phone ?? draft.phone.trim(),
+        driverEmail: response.email ?? draft.email.trim(),
+        driverLicenseNumber: draft.driverLicenseNumber.trim(),
         driverRating: t('vehicleAddPendingValue'),
         shiftWindow: '',
         earningsToday: '₹0',
@@ -631,6 +640,12 @@ export function VehiclesScreen({
               name={vehicle.name}
               status={status.label}
               statusTone={status.tone}
+              driverLabel="Driver details"
+              driverValue={
+                [vehicle.driverPhone, vehicle.driverEmail]
+                  .filter(Boolean)
+                  .join(' • ') || 'Pending review'
+              }
               capacityLabel={t('vehicleCardCapacity')}
               capacityValue={vehicle.capacity}
               routeLabel={t('vehicleCardRoute')}

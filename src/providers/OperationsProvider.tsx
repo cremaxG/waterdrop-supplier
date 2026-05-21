@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { syncAppShortcutsSummary } from '../native/appShortcuts';
 import ProductApi from '../service/productApi';
 import SupplierApi from '../service/supplierApi';
 import { syncHomeWidgetSummary } from '../native/homeWidget';
 import type { ProductRecord } from '../screens/product/ProductDetailsScreen';
 import type { VehicleRecord } from '../screens/vehicle/VehicleDetailsScreen';
+import { getStoredVehicleMetadata } from '../storage/vehicleMetadata';
 
 function extractCollection(response: any, key?: string) {
   const candidates = [
@@ -115,18 +117,30 @@ function deriveVehicleInventoryFromVehicles(
 function normalizeVehicle(item: any): VehicleRecord {
   const products = Array.isArray(item.products) ? item.products : [];
   const history = Array.isArray(item.history) ? item.history : [];
+  const vehicleId = String(item.id ?? item.vehicle_number ?? 'unknown-vehicle');
+  const metadata = getStoredVehicleMetadata(vehicleId) ?? {};
 
   return {
-    id: String(item.id ?? item.vehicle_number ?? 'unknown-vehicle'),
+    id: vehicleId,
     name: item.name ?? item.vehicle_number ?? 'Unnamed vehicle',
     route: item.route ?? item.vehicle_number ?? 'Unknown route',
-    capacity: item.capacity ?? 'N/A',
+    capacity: item.capacity ?? metadata.capacity ?? 'N/A',
     currentLocation:
       item.currentLocation ||
       [item.lat, item.lng].filter(Boolean).join(', ') ||
       'Unknown location',
-    driverName: item.driverName ?? item.driver_name ?? '',
+    driverName:
+      item.driverName ??
+      item.driver_name ??
+      metadata.driverName ??
+      'Assigned driver',
     driverPhone: item.driverPhone ?? item.phone ?? '',
+    driverEmail: item.driverEmail ?? item.email ?? metadata.driverEmail ?? '',
+    driverLicenseNumber:
+      item.driverLicenseNumber ??
+      item.driver_license_number ??
+      metadata.driverLicenseNumber ??
+      '',
     driverRating: item.driverRating ?? 'N/A',
     shiftWindow: item.shiftWindow ?? '',
     earningsToday: item.earningsToday ?? '₹0',
@@ -307,12 +321,19 @@ export function OperationsProvider({
   }, []);
 
   useEffect(() => {
-    syncHomeWidgetSummary({
+    const summary = {
       vehicles: state.vehicles.length,
       products: state.products.length,
       pendingReviews: state.vehicles.filter(
         vehicle => vehicle.reviewStatus === 'pending',
       ).length,
+    };
+
+    syncAppShortcutsSummary(summary);
+    syncHomeWidgetSummary({
+      vehicles: summary.vehicles,
+      products: summary.products,
+      pendingReviews: summary.pendingReviews,
     });
   }, [state.products.length, state.vehicles]);
 

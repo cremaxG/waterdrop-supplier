@@ -57,12 +57,29 @@ class SupplierHomeWidgetProvider : AppWidgetProvider() {
 
       remoteViews.setTextViewText(
         R.id.widgetSubtitle,
-        context.getString(R.string.widget_subtitle),
+        context.getString(
+          R.string.widget_subtitle_dynamic,
+          vehicles,
+          products,
+          pendingReviews,
+        ),
       )
       remoteViews.setTextViewText(R.id.widgetVehicleValue, vehicles.toString())
       remoteViews.setTextViewText(R.id.widgetProductValue, products.toString())
       remoteViews.setTextViewText(R.id.widgetPendingValue, pendingReviews.toString())
 
+      remoteViews.setOnClickPendingIntent(
+        R.id.widgetVehicleCard,
+        createLaunchPendingIntent(context, "watersupplier://widget/vehicles"),
+      )
+      remoteViews.setOnClickPendingIntent(
+        R.id.widgetProductCard,
+        createLaunchPendingIntent(context, "watersupplier://widget/products"),
+      )
+      remoteViews.setOnClickPendingIntent(
+        R.id.widgetPendingCard,
+        createLaunchPendingIntent(context, "watersupplier://widget/profile/reviews"),
+      )
       remoteViews.setOnClickPendingIntent(
         R.id.widgetRoot,
         createLaunchPendingIntent(context, "watersupplier://widget/dashboard"),
@@ -78,6 +95,10 @@ class SupplierHomeWidgetProvider : AppWidgetProvider() {
       remoteViews.setOnClickPendingIntent(
         R.id.widgetOrdersButton,
         createLaunchPendingIntent(context, "watersupplier://widget/profile/orders"),
+      )
+      remoteViews.setOnClickPendingIntent(
+        R.id.widgetProductsButton,
+        createLaunchPendingIntent(context, "watersupplier://widget/products"),
       )
       remoteViews.setOnClickPendingIntent(
         R.id.widgetFleetButton,

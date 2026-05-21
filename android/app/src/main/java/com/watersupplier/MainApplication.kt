@@ -6,6 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.watersupplier.widget.AppShortcutPublisher
 import com.watersupplier.widget.HomeWidgetBridgePackage
 
 class MainApplication : Application(), ReactApplication {
@@ -23,5 +24,6 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     loadReactNative(this)
+    AppShortcutPublisher.publish(this, 0, 0, 0)
   }
 }

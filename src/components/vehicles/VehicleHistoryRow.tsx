@@ -4,18 +4,22 @@ import { AppIcon, AppText } from '../index';
 import { useAppPalette } from '../../hooks/useAppPalette';
 
 interface VehicleHistoryRowProps {
-  route: string;
+  orderNumber: string;
+  confirmationLocation: string;
+  deliveryLocation: string;
+  status: string;
   time: string;
-  orders: string;
-  earnings: string;
+  paymentAmount: string;
   onPress?: () => void;
 }
 
 export function VehicleHistoryRow({
-  route,
+  orderNumber,
+  confirmationLocation,
+  deliveryLocation,
+  status,
   time,
-  orders,
-  earnings,
+  paymentAmount,
   onPress,
 }: VehicleHistoryRowProps) {
   const palette = useAppPalette();
@@ -30,25 +34,41 @@ export function VehicleHistoryRow({
           borderColor: palette.border,
         },
       ]}
-    >
+      >
       <View style={styles.header}>
         <AppText style={[styles.route, { color: palette.text }]}>
-          {route}
+          {orderNumber}
         </AppText>
         <AppText style={[styles.time, { color: palette.muted }]}>{time}</AppText>
+      </View>
+      <View style={styles.locationBlock}>
+        <AppText style={[styles.locationLabel, { color: palette.muted }]}>
+          Confirmation
+        </AppText>
+        <AppText style={[styles.locationValue, { color: palette.text }]}>
+          {confirmationLocation}
+        </AppText>
+      </View>
+      <View style={styles.locationBlock}>
+        <AppText style={[styles.locationLabel, { color: palette.muted }]}>
+          Delivery
+        </AppText>
+        <AppText style={[styles.locationValue, { color: palette.text }]}>
+          {deliveryLocation}
+        </AppText>
       </View>
       <View style={styles.footerRow}>
         <View style={styles.metaRow}>
           <View style={styles.metaChip}>
             <AppIcon name="dashboard" size={14} color={palette.accentStrong} />
             <AppText style={[styles.metaText, { color: palette.text }]}>
-              {orders}
+              {status}
             </AppText>
           </View>
           <View style={styles.metaChip}>
             <AppIcon name="money" size={14} color={palette.success} />
             <AppText style={[styles.metaText, { color: palette.text }]}>
-              {earnings}
+              {paymentAmount}
             </AppText>
           </View>
         </View>
@@ -89,6 +109,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  locationBlock: {
+    marginBottom: 10,
+  },
+  locationLabel: {
+    fontSize: 12,
+    marginBottom: 3,
+  },
+  locationValue: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   metaChip: {
     flexDirection: 'row',

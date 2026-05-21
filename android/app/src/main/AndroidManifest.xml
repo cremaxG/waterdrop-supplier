@@ -6,7 +6,7 @@
       android:name=".MainApplication"
       android:label="@string/app_name"
       android:icon="@mipmap/ic_launcher"
-      android:roundIcon="@mipmap/ic_launcher_round"
+      android:roundIcon="@mipmap/ic_launcher"
       android:allowBackup="false"
       android:theme="@style/AppTheme"
       android:usesCleartextTraffic="${usesCleartextTraffic}"
@@ -28,13 +28,10 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="watersupplier" />
         </intent-filter>
-        <meta-data
-          android:name="android.app.shortcuts"
-          android:resource="@xml/shortcuts" />
       </activity>
       <receiver
         android:name=".widget.SupplierHomeWidgetProvider"
-        android:exported="false">
+        android:exported="true">
         <intent-filter>
           <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
         </intent-filter>

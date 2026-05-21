@@ -48,10 +48,10 @@ export function VehicleHistoryOrderScreen({
         ]}
       >
         <AppText style={[styles.orderId, { color: palette.accentStrong }]}>
-          {historyItem.id}
+          {historyItem.orderNumber ?? historyItem.id}
         </AppText>
         <AppText style={[styles.heroTitle, { color: palette.text }]}>
-          {historyItem.route}
+          {vehicle.name} • {vehicle.route}
         </AppText>
         <AppText style={[styles.heroSubtitle, { color: palette.muted }]}>
           {historyItem.time}
@@ -94,45 +94,53 @@ export function VehicleHistoryOrderScreen({
       </View>
 
       <VehicleSectionCard
-        title={t('vehicleHistoryOrderCustomerTitle')}
-        subtitle={t('vehicleHistoryOrderCustomerSubtitle')}
+        title="Order confirmation"
+        subtitle="Pickup and assignment details for this order."
       >
         <View style={styles.stack}>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderCustomerLabel')}
+              Order number
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {historyItem.customerName}
+              {historyItem.orderNumber ?? historyItem.id}
             </AppText>
           </View>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderAddressLabel')}
+              Confirmation location
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {historyItem.stopAddress}
+              {historyItem.confirmationLocation ?? historyItem.route}
             </AppText>
           </View>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderVehicleLabel')}
+              Assigned vehicle
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.name}
+              {vehicle.name} • {vehicle.route}
             </AppText>
           </View>
         </View>
       </VehicleSectionCard>
 
       <VehicleSectionCard
-        title={t('vehicleHistoryOrderDeliveryTitle')}
-        subtitle={t('vehicleHistoryOrderDeliverySubtitle')}
+        title="Delivery details"
+        subtitle="Delivery destination, status, and fulfilment details."
       >
         <View style={styles.stack}>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderStatusLabel')}
+              Delivery location
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.deliveryLocation ?? historyItem.stopAddress}
+            </AppText>
+          </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              Order status
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
               {historyItem.completionStatus}
@@ -140,7 +148,7 @@ export function VehicleHistoryOrderScreen({
           </View>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderDeliveredUnitsLabel')}
+              Delivered units
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
               {historyItem.deliveredUnits}
@@ -148,50 +156,66 @@ export function VehicleHistoryOrderScreen({
           </View>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderPaymentModeLabel')}
+              Customer
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {historyItem.paymentMode}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderOrdersLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {historyItem.orders}
+              {historyItem.customerName}
             </AppText>
           </View>
         </View>
       </VehicleSectionCard>
 
       <VehicleSectionCard
-        title={t('vehicleHistoryOrderOpsTitle')}
-        subtitle={t('vehicleHistoryOrderOpsSubtitle')}
+        title="Payment details"
+        subtitle="Payment amount and collection mode for this order."
       >
         <View style={styles.stack}>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderStartReadingLabel')}
+              Payment amount
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {historyItem.startReading}
+              {historyItem.orderValue}
             </AppText>
           </View>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderEndReadingLabel')}
+              Payment mode
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {historyItem.endReading}
+              {historyItem.paymentMode}
+            </AppText>
+            </View>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              Vehicle earnings
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {historyItem.earnings}
+            </AppText>
+          </View>
+        </View>
+      </VehicleSectionCard>
+
+      <VehicleSectionCard
+        title="Ratings"
+        subtitle="Ratings and operational notes attached to this order."
+      >
+        <View style={styles.stack}>
+          <View style={styles.detailRow}>
+            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+              Driver rating
+            </AppText>
+            <AppText style={[styles.detailValue, { color: palette.text }]}>
+              {vehicle.driverRating || '—'}
             </AppText>
           </View>
           <View style={styles.detailRow}>
             <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleHistoryOrderNotesLabel')}
+              Dispatch notes
             </AppText>
             <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {historyItem.notes}
+              {historyItem.notes || '—'}
             </AppText>
           </View>
         </View>
