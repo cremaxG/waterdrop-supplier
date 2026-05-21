@@ -46,6 +46,11 @@ interface ProfileScreenProps {
   onOpenDocumentsSheet: () => void;
   onOpenSupportSheet: () => void;
   onOpenAlertsSheet: () => void;
+  onOpenAddresses: () => void;
+  onOpenOrders: () => void;
+  onOpenReviews: () => void;
+  onOpenDiscounts: () => void;
+  onOpenImages: () => void;
   onOpenVehicles: () => void;
   onOpenProducts: () => void;
   onRequestLogout: () => void;
@@ -70,6 +75,11 @@ export function ProfileScreen({
   onOpenDocumentsSheet,
   onOpenSupportSheet,
   onOpenAlertsSheet,
+  onOpenAddresses,
+  onOpenOrders,
+  onOpenReviews,
+  onOpenDiscounts,
+  onOpenImages,
   onOpenVehicles,
   onOpenProducts,
   onRequestLogout,
@@ -227,7 +237,10 @@ export function ProfileScreen({
   }
 
   return (
-    <AppRefreshScrollView onRefresh={loadProfile}>
+    <AppRefreshScrollView
+      onRefresh={loadProfile}
+      contentContainerStyle={styles.contentContainer}
+    >
       <AppText style={[styles.sectionTitle, { color: palette.text }]}>
         {t('profileHeading')}
       </AppText>
@@ -353,6 +366,44 @@ export function ProfileScreen({
       </ProfileCard>
 
       <ProfileCard
+        title={t('profileResourcesTitle')}
+        subtitle={t('profileResourcesSubtitle')}
+      >
+        <View style={styles.stack}>
+          <ProfileActionRow
+            icon="location"
+            title={t('supplierResourcesAddressesTitle')}
+            description={t('profileAddressesDescription')}
+            onPress={onOpenAddresses}
+          />
+          <ProfileActionRow
+            icon="package"
+            title={t('supplierResourcesOrdersTitle')}
+            description={t('profileOrdersDescription')}
+            onPress={onOpenOrders}
+          />
+          <ProfileActionRow
+            icon="star"
+            title={t('supplierResourcesReviewsTitle')}
+            description={t('profileReviewsDescription')}
+            onPress={onOpenReviews}
+          />
+          <ProfileActionRow
+            icon="money"
+            title={t('supplierResourcesDiscountsTitle')}
+            description={t('profileDiscountsDescription')}
+            onPress={onOpenDiscounts}
+          />
+          <ProfileActionRow
+            icon="image"
+            title={t('supplierResourcesImagesTitle')}
+            description={t('profileImagesDescription')}
+            onPress={onOpenImages}
+          />
+        </View>
+      </ProfileCard>
+
+      <ProfileCard
         title={t('profileAccountTitle')}
         subtitle={t('profileAccountSubtitle')}
       >
@@ -429,6 +480,9 @@ export function ProfileScreen({
 }
 
 const styles = StyleSheet.create({
+  contentContainer: {
+    paddingBottom: 170,
+  },
   sectionTitle: {
     fontSize: 28,
     fontWeight: '800',

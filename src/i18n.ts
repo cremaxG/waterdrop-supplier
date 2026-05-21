@@ -349,6 +349,19 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     profileQuickActionDocs: 'Review permits and tax documents',
     profileQuickActionDocsDescription:
       'Check licenses, permits, and compliance records in one place.',
+    profileResourcesTitle: 'Supplier resources',
+    profileResourcesSubtitle:
+      'Review supplier-side addresses, order history, reviews, discounts, and image assets.',
+    profileAddressesDescription:
+      'See the registered supplier address and location data used across the workspace.',
+    profileOrdersDescription:
+      'Track supplier-linked order history and previously ordered catalog items.',
+    profileReviewsDescription:
+      'Monitor customer feedback, ratings, and recent review activity.',
+    profileDiscountsDescription:
+      'Inspect active and scheduled supplier discount campaigns.',
+    profileImagesDescription:
+      'Browse uploaded supplier profile, gallery, and document images.',
     profileAccountTitle: 'Account and support',
     profileAccountSubtitle:
       'Keep company details, payouts, help, and sign-out controls accessible.',
@@ -431,6 +444,47 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     logoutSheetSubtitle: 'End your active supplier session on this device.',
     logoutSheetBody:
       'You will return to the sign-in screen, but your preferred theme and language will stay saved on this device.',
+    supplierResourcesBackButton: 'Back to profile',
+    supplierResourcesProfileMissing: 'Unable to load supplier profile details.',
+    supplierResourcesLoadFailed: 'Unable to load supplier resources right now.',
+    supplierResourcesLoadingLabel: 'Loading supplier resource data...',
+    supplierResourcesRetryButton: 'Retry',
+    supplierResourcesEmptyLabel: 'No records are available in this section yet.',
+    supplierResourcesCountLabel: 'Records',
+    supplierResourcesTypesLabel: 'Types',
+    supplierResourcesPrimaryLabel: 'Primary',
+    supplierResourcesActiveLabel: 'Active',
+    supplierResourcesInactiveLabel: 'Inactive',
+    supplierResourcesUpdatedLabel: 'Updated',
+    supplierResourcesUserLabel: 'User',
+    supplierResourcesQuantityLabel: 'Quantity',
+    supplierResourcesMinimumLabel: 'Minimum amount',
+    supplierResourcesDurationLabel: 'Duration',
+    supplierResourcesCoordinatesLabel: 'Coordinates',
+    supplierResourcesOrderLabel: 'Order',
+    supplierResourcesOrderHistoryLabel: 'Supplier order history',
+    supplierResourcesReviewLabel: 'Review',
+    supplierResourcesDiscountTypeLabel: 'Discount type',
+    supplierResourcesDiscountFallback: 'Supplier discount',
+    supplierResourcesImageUnavailable: 'Image preview unavailable',
+    supplierResourcesNoDescription: 'No description available.',
+    supplierResourcesAddressFallback: 'Registered supplier address',
+    supplierResourcesAddressRegistered: 'Registered business address',
+    supplierResourcesAddressesTitle: 'Addresses',
+    supplierResourcesAddressesSubtitle:
+      'Supplier registration address, contact details, and map coordinates.',
+    supplierResourcesOrdersTitle: 'Orders',
+    supplierResourcesOrdersSubtitle:
+      'Supplier-linked order history and previously ordered product records.',
+    supplierResourcesReviewsTitle: 'Reviews',
+    supplierResourcesReviewsSubtitle:
+      'Customer feedback and ratings associated with this supplier.',
+    supplierResourcesDiscountsTitle: 'Supplier discounts',
+    supplierResourcesDiscountsSubtitle:
+      'Campaign rules, active offers, and upcoming supplier discounts.',
+    supplierResourcesImagesTitle: 'Supplier images',
+    supplierResourcesImagesSubtitle:
+      'Profile, gallery, and document images uploaded for this supplier.',
   },
   hi: {
     appTitle: 'जल आपूर्तिकर्ता',
@@ -774,6 +828,19 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     profileQuickActionDocs: 'परमिट और टैक्स दस्तावेज़ देखें',
     profileQuickActionDocsDescription:
       'लाइसेंस, परमिट और अनुपालन रिकॉर्ड एक ही जगह देखें।',
+    profileResourcesTitle: 'सप्लायर संसाधन',
+    profileResourcesSubtitle:
+      'सप्लायर के पते, ऑर्डर इतिहास, रिव्यू, डिस्काउंट और इमेज एसेट्स देखें।',
+    profileAddressesDescription:
+      'वर्कस्पेस में उपयोग होने वाले पंजीकृत सप्लायर पते और लोकेशन डेटा देखें।',
+    profileOrdersDescription:
+      'सप्लायर से जुड़े ऑर्डर इतिहास और पहले ऑर्डर किए गए कैटलॉग आइटम ट्रैक करें।',
+    profileReviewsDescription:
+      'ग्राहक फीडबैक, रेटिंग और हाल की रिव्यू गतिविधि मॉनिटर करें।',
+    profileDiscountsDescription:
+      'सक्रिय और तय किए गए सप्लायर डिस्काउंट अभियान देखें।',
+    profileImagesDescription:
+      'अपलोड की गई सप्लायर प्रोफाइल, गैलरी और डॉक्यूमेंट इमेज ब्राउज़ करें।',
     profileAccountTitle: 'खाता और सपोर्ट',
     profileAccountSubtitle:
       'कंपनी विवरण, भुगतान, सहायता और साइन-आउट नियंत्रण आसानी से उपलब्ध रखें।',
@@ -856,6 +923,47 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     logoutSheetSubtitle: 'इस डिवाइस पर अपना सक्रिय सप्लायर सेशन समाप्त करें।',
     logoutSheetBody:
       'आप साइन-इन स्क्रीन पर लौटेंगे, लेकिन आपकी पसंदीदा थीम और भाषा इस डिवाइस पर सुरक्षित रहेगी।',
+    supplierResourcesBackButton: 'प्रोफ़ाइल पर वापस जाएँ',
+    supplierResourcesProfileMissing: 'सप्लायर प्रोफ़ाइल विवरण लोड नहीं हो सके।',
+    supplierResourcesLoadFailed: 'अभी सप्लायर संसाधन लोड नहीं हो सके।',
+    supplierResourcesLoadingLabel: 'सप्लायर संसाधन डेटा लोड हो रहा है...',
+    supplierResourcesRetryButton: 'फिर से प्रयास करें',
+    supplierResourcesEmptyLabel: 'इस सेक्शन में अभी कोई रिकॉर्ड उपलब्ध नहीं है।',
+    supplierResourcesCountLabel: 'रिकॉर्ड',
+    supplierResourcesTypesLabel: 'प्रकार',
+    supplierResourcesPrimaryLabel: 'मुख्य',
+    supplierResourcesActiveLabel: 'सक्रिय',
+    supplierResourcesInactiveLabel: 'निष्क्रिय',
+    supplierResourcesUpdatedLabel: 'अपडेट',
+    supplierResourcesUserLabel: 'उपयोगकर्ता',
+    supplierResourcesQuantityLabel: 'मात्रा',
+    supplierResourcesMinimumLabel: 'न्यूनतम राशि',
+    supplierResourcesDurationLabel: 'अवधि',
+    supplierResourcesCoordinatesLabel: 'निर्देशांक',
+    supplierResourcesOrderLabel: 'ऑर्डर',
+    supplierResourcesOrderHistoryLabel: 'सप्लायर ऑर्डर इतिहास',
+    supplierResourcesReviewLabel: 'रिव्यू',
+    supplierResourcesDiscountTypeLabel: 'डिस्काउंट प्रकार',
+    supplierResourcesDiscountFallback: 'सप्लायर डिस्काउंट',
+    supplierResourcesImageUnavailable: 'इमेज प्रीव्यू उपलब्ध नहीं है',
+    supplierResourcesNoDescription: 'कोई विवरण उपलब्ध नहीं है।',
+    supplierResourcesAddressFallback: 'पंजीकृत सप्लायर पता',
+    supplierResourcesAddressRegistered: 'पंजीकृत व्यवसाय पता',
+    supplierResourcesAddressesTitle: 'पते',
+    supplierResourcesAddressesSubtitle:
+      'सप्लायर पंजीकरण पता, संपर्क विवरण और मैप निर्देशांक।',
+    supplierResourcesOrdersTitle: 'ऑर्डर',
+    supplierResourcesOrdersSubtitle:
+      'सप्लायर से जुड़े ऑर्डर इतिहास और पहले ऑर्डर किए गए उत्पाद रिकॉर्ड।',
+    supplierResourcesReviewsTitle: 'रिव्यू',
+    supplierResourcesReviewsSubtitle:
+      'इस सप्लायर से जुड़े ग्राहक फीडबैक और रेटिंग।',
+    supplierResourcesDiscountsTitle: 'सप्लायर डिस्काउंट',
+    supplierResourcesDiscountsSubtitle:
+      'कैंपेन नियम, सक्रिय ऑफ़र और आने वाले सप्लायर डिस्काउंट।',
+    supplierResourcesImagesTitle: 'सप्लायर इमेज',
+    supplierResourcesImagesSubtitle:
+      'इस सप्लायर के लिए अपलोड की गई प्रोफ़ाइल, गैलरी और डॉक्यूमेंट इमेज।',
   },
 };
 

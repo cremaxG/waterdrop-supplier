@@ -14,6 +14,10 @@ import { useTheme, useTranslation } from '../providers/AppProviders';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { ProductsScreen } from '../screens/product/ProductsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
+import {
+  SupplierResourceKey,
+  SupplierResourceScreen,
+} from '../screens/profile/SupplierResourceScreen';
 import { VehiclesScreen } from '../screens/vehicle/VehiclesScreen';
 import { ThemePreference } from '../theme';
 import { AppTabKey } from './types';
@@ -45,6 +49,8 @@ export function MainTabNavigator({
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [isVehicleDetailsVisible, setVehicleDetailsVisible] = useState(false);
   const [isProductDetailsVisible, setProductDetailsVisible] = useState(false);
+  const [activeProfileResource, setActiveProfileResource] =
+    useState<SupplierResourceKey | null>(null);
 
   const tabs = useMemo(
     () => [
@@ -73,6 +79,9 @@ export function MainTabNavigator({
   const currentLanguageLabel = availableLanguages[language];
 
   const openTab = (tab: AppTabKey) => {
+    if (tab !== 'profile') {
+      setActiveProfileResource(null);
+    }
     setActiveTab(tab);
   };
 
@@ -100,6 +109,15 @@ export function MainTabNavigator({
           />
         );
       case 'profile':
+        if (activeProfileResource) {
+          return (
+            <SupplierResourceScreen
+              resourceKey={activeProfileResource}
+              onBack={() => setActiveProfileResource(null)}
+            />
+          );
+        }
+
         return (
           <ProfileScreen
             currentThemeLabel={currentThemeLabel}
@@ -112,6 +130,11 @@ export function MainTabNavigator({
             onOpenDocumentsSheet={() => setActiveSheet('documents')}
             onOpenSupportSheet={() => setActiveSheet('support')}
             onOpenAlertsSheet={() => setActiveSheet('alerts')}
+            onOpenAddresses={() => setActiveProfileResource('addresses')}
+            onOpenOrders={() => setActiveProfileResource('orders')}
+            onOpenReviews={() => setActiveProfileResource('reviews')}
+            onOpenDiscounts={() => setActiveProfileResource('discounts')}
+            onOpenImages={() => setActiveProfileResource('images')}
             onOpenVehicles={() => openTab('vehicles')}
             onOpenProducts={() => openTab('products')}
             onRequestLogout={() => setActiveSheet('logout')}
@@ -518,6 +541,7 @@ export function MainTabNavigator({
 
       {!isVehicleDetailsVisible && !isProductDetailsVisible ? (
         <View
+          pointerEvents="box-none"
           style={[
             styles.bottomBarWrap,
             { paddingBottom: Math.max(insets.bottom, 14) },

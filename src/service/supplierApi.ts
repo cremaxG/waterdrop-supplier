@@ -81,6 +81,15 @@ export interface VehicleResponse {
   updated_at?: string;
 }
 
+export interface SupplierResourceQuery {
+  limit?: number;
+  cursor?: number | string;
+  page?: number;
+  search?: string;
+  type?: string;
+  active?: boolean;
+}
+
 export default class SupplierApi {
   static registerSupplier(payload: SupplierRegisterPayload) {
     return BaseApi.post('/auth/suppliers/register', payload, {}, {}, '');
@@ -120,5 +129,35 @@ export default class SupplierApi {
 
   static deleteVehicle(vehicleId: number | string) {
     return BaseApi.delete(`/vehicles/${vehicleId}`);
+  }
+
+  static listSupplierOrderProducts(supplierId: number | string) {
+    return BaseApi.get(`/orders/products/supplier/${supplierId}`);
+  }
+
+  static listSupplierReviews(supplierId: number | string) {
+    return BaseApi.get(`/reviews/supplier/${supplierId}`);
+  }
+
+  static listSupplierDiscounts(
+    supplierId: number | string,
+    params?: SupplierResourceQuery,
+  ) {
+    return BaseApi.get(
+      `/supplier-discounts/${supplierId}/discounts`,
+      {},
+      { params },
+    );
+  }
+
+  static listSupplierImages(
+    supplierId: number | string,
+    params?: SupplierResourceQuery,
+  ) {
+    return BaseApi.get(
+      `/supplier-images/supplier/${supplierId}`,
+      {},
+      { params },
+    );
   }
 }
