@@ -26,11 +26,6 @@ RCT_EXPORT_METHOD(updateSummary:(nonnull NSNumber *)vehicles
       pendingReviews.integerValue > 0
         ? [NSString stringWithFormat:@"%@ pending reviews", pendingReviews]
         : @"Open supplier orders";
-    NSString *fleetSubtitle =
-      pendingReviews.integerValue > 0
-        ? [NSString stringWithFormat:@"%@ vehicles awaiting review", pendingReviews]
-        : @"Review fleet operations";
-
     UIApplicationShortcutItem *addVehicle =
       [[UIApplicationShortcutItem alloc]
         initWithType:@"com.watersupplier.addVehicle"
@@ -55,16 +50,16 @@ RCT_EXPORT_METHOD(updateSummary:(nonnull NSNumber *)vehicles
         icon:[UIApplicationShortcutIcon iconWithType:UIApplicationShortcutIconTypeTask]
         userInfo:nil];
 
-    UIApplicationShortcutItem *openFleet =
+    UIApplicationShortcutItem *shareApp =
       [[UIApplicationShortcutItem alloc]
-        initWithType:@"com.watersupplier.fleet"
-        localizedTitle:@"Open Fleet"
-        localizedSubtitle:fleetSubtitle
-        icon:[UIApplicationShortcutIcon iconWithType:UIApplicationShortcutIconTypeHome]
+        initWithType:@"com.watersupplier.share"
+        localizedTitle:@"Share App"
+        localizedSubtitle:@"Invite suppliers to WaterSupplier"
+        icon:[UIApplicationShortcutIcon iconWithType:UIApplicationShortcutIconTypeShare]
         userInfo:nil];
 
     [UIApplication sharedApplication].shortcutItems =
-      @[addVehicle, addProduct, viewOrders, openFleet];
+      @[addVehicle, addProduct, viewOrders, shareApp];
   });
 }
 

@@ -2,7 +2,6 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
-import RCTLinkingManager
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -76,8 +75,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       return URL(string: "watersupplier://shortcut/products/add")
     case "com.watersupplier.orders":
       return URL(string: "watersupplier://shortcut/profile/orders")
-    case "com.watersupplier.fleet":
-      return URL(string: "watersupplier://shortcut/vehicles")
+    case "com.watersupplier.share":
+      return URL(string: "watersupplier://shortcut/share")
     default:
       return nil
     }

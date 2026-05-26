@@ -50,6 +50,7 @@
 	<string></string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
+	<!-- Temporary: keep the system launch storyboard wired, but leave it visually blank so the React splash is the only branded splash. -->
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
@@ -103,13 +104,13 @@
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemIconType</key>
-			<string>UIApplicationShortcutIconTypeHome</string>
+			<string>UIApplicationShortcutIconTypeShare</string>
 			<key>UIApplicationShortcutItemSubtitle</key>
-			<string>Go to fleet operations</string>
+			<string>Invite suppliers to WaterSupplier</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>Open Fleet</string>
+			<string>Share App</string>
 			<key>UIApplicationShortcutItemType</key>
-			<string>com.watersupplier.fleet</string>
+			<string>com.watersupplier.share</string>
 		</dict>
 	</array>
 </dict>
