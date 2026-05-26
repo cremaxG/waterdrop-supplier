@@ -1,6 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { AppButton, AppIcon, AppInput, AppText } from '../../components';
+import {
+  AppButton,
+  AppFieldMessage,
+  AppIcon,
+  AppInput,
+  AppText,
+} from '../../components';
 import { VehicleSectionCard } from '../../components/vehicles';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
@@ -16,12 +22,48 @@ export interface NewVehicleDraft {
 
 interface AddVehicleScreenProps {
   onBack: () => void;
-  onSubmit: (draft: NewVehicleDraft) => void;
+  onSubmit: (draft: NewVehicleDraft) => void | Promise<void>;
+  isSubmitting?: boolean;
+  submitErrorMessage?: string | null;
+}
+
+type VehicleField = keyof NewVehicleDraft;
+
+function isEmail(value: string) {
+  return /\S+@\S+\.\S+/.test(value.trim());
+}
+
+function getVehicleValidationErrors(draft: NewVehicleDraft) {
+  return {
+    vehicleNumber: !draft.vehicleNumber.trim()
+      ? 'Vehicle registration number is required.'
+      : '',
+    name: !draft.name.trim()
+      ? 'Vehicle name is required.'
+      : draft.name.trim().length < 2
+        ? 'Enter at least 2 characters for the vehicle name.'
+        : '',
+    phone: !draft.phone.trim()
+      ? 'Contact phone number is required.'
+      : draft.phone.replace(/\D/g, '').length !== 10
+        ? 'Enter a valid 10-digit phone number.'
+        : '',
+    email:
+      draft.email.trim() && !isEmail(draft.email)
+        ? 'Enter a valid email address or leave this field empty.'
+        : '',
+    capacity: !draft.capacity.trim() ? 'Vehicle load capacity is required.' : '',
+    driverLicenseNumber: !draft.driverLicenseNumber.trim()
+      ? 'Driver licence number is required.'
+      : '',
+  } satisfies Record<VehicleField, string>;
 }
 
 export function AddVehicleScreen({
   onBack,
   onSubmit,
+  isSubmitting = false,
+  submitErrorMessage = null,
 }: AddVehicleScreenProps) {
   const { t } = useTranslation();
   const palette = useAppPalette();
@@ -33,22 +75,36 @@ export function AddVehicleScreen({
     capacity: '',
     driverLicenseNumber: '',
   });
+  const [touchedFields, setTouchedFields] = useState<
+    Partial<Record<VehicleField, boolean>>
+  >({});
+  const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
 
-  const isValid = useMemo(
-    () =>
-      [
-        draft.vehicleNumber,
-        draft.name,
-        draft.phone,
-        draft.capacity,
-        draft.driverLicenseNumber,
-      ].every(value => value.trim().length > 0) &&
-      draft.phone.replace(/\D/g, '').length >= 10,
-    [draft],
+  const validationErrors = useMemo(() => getVehicleValidationErrors(draft), [draft]);
+  const hasValidationErrors = useMemo(
+    () => Object.values(validationErrors).some(Boolean),
+    [validationErrors],
   );
 
   const updateField = (field: keyof NewVehicleDraft, value: string) => {
     setDraft(current => ({ ...current, [field]: value }));
+  };
+
+  const markTouched = (field: VehicleField) => {
+    setTouchedFields(current => ({ ...current, [field]: true }));
+  };
+
+  const shouldShowFieldError = (field: VehicleField) =>
+    Boolean((didAttemptSubmit || touchedFields[field]) && validationErrors[field]);
+
+  const handleSubmit = async () => {
+    setDidAttemptSubmit(true);
+
+    if (hasValidationErrors || isSubmitting) {
+      return;
+    }
+
+    await onSubmit(draft);
   };
 
   return (
@@ -102,12 +158,26 @@ export function AddVehicleScreen({
           <AppInput
             value={draft.vehicleNumber}
             onChangeText={value => updateField('vehicleNumber', value)}
+            onBlur={() => markTouched('vehicleNumber')}
             placeholder={t('vehicleAddNumberPlaceholder')}
+            hasError={shouldShowFieldError('vehicleNumber')}
+          />
+          <AppFieldMessage
+            message={
+              shouldShowFieldError('vehicleNumber')
+                ? validationErrors.vehicleNumber
+                : null
+            }
           />
           <AppInput
             value={draft.name}
             onChangeText={value => updateField('name', value)}
+            onBlur={() => markTouched('name')}
             placeholder={t('vehicleAddNamePlaceholder')}
+            hasError={shouldShowFieldError('name')}
+          />
+          <AppFieldMessage
+            message={shouldShowFieldError('name') ? validationErrors.name : null}
           />
         </View>
       </VehicleSectionCard>
@@ -120,14 +190,25 @@ export function AddVehicleScreen({
           <AppInput
             value={draft.phone}
             onChangeText={value => updateField('phone', value)}
+            onBlur={() => markTouched('phone')}
             placeholder={t('vehicleAddPhonePlaceholder')}
             keyboardType="phone-pad"
+            hasError={shouldShowFieldError('phone')}
+          />
+          <AppFieldMessage
+            message={shouldShowFieldError('phone') ? validationErrors.phone : null}
           />
           <AppInput
             value={draft.email}
             onChangeText={value => updateField('email', value)}
+            onBlur={() => markTouched('email')}
             placeholder="Vehicle driver email (optional)"
             keyboardType="email-address"
+            autoCapitalize="none"
+            hasError={shouldShowFieldError('email')}
+          />
+          <AppFieldMessage
+            message={shouldShowFieldError('email') ? validationErrors.email : null}
           />
         </View>
       </VehicleSectionCard>
@@ -140,12 +221,28 @@ export function AddVehicleScreen({
           <AppInput
             value={draft.capacity}
             onChangeText={value => updateField('capacity', value)}
+            onBlur={() => markTouched('capacity')}
             placeholder="Vehicle load capacity"
+            hasError={shouldShowFieldError('capacity')}
+          />
+          <AppFieldMessage
+            message={
+              shouldShowFieldError('capacity') ? validationErrors.capacity : null
+            }
           />
           <AppInput
             value={draft.driverLicenseNumber}
             onChangeText={value => updateField('driverLicenseNumber', value)}
+            onBlur={() => markTouched('driverLicenseNumber')}
             placeholder="Vehicle driver licence number"
+            hasError={shouldShowFieldError('driverLicenseNumber')}
+          />
+          <AppFieldMessage
+            message={
+              shouldShowFieldError('driverLicenseNumber')
+                ? validationErrors.driverLicenseNumber
+                : null
+            }
           />
         </View>
       </VehicleSectionCard>
@@ -158,10 +255,17 @@ export function AddVehicleScreen({
           <AppText style={[styles.noteText, { color: palette.muted }]}>
             {t('vehicleAddReviewNote')}
           </AppText>
+          <AppFieldMessage
+            message={
+              didAttemptSubmit && hasValidationErrors
+                ? 'Please fix the highlighted fields before submitting for review.'
+                : submitErrorMessage
+            }
+          />
           <AppButton
             title={t('vehicleAddSubmitButton')}
-            onPress={() => onSubmit(draft)}
-            disabled={!isValid}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
             style={styles.submitButton}
             textStyle={styles.submitButtonText}
           />

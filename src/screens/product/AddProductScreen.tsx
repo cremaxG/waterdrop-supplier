@@ -5,7 +5,13 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { AppButton, AppIcon, AppInput, AppText } from '../../components';
+import {
+  AppButton,
+  AppFieldMessage,
+  AppIcon,
+  AppInput,
+  AppText,
+} from '../../components';
 import { VehicleSectionCard } from '../../components/vehicles';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
@@ -25,12 +31,57 @@ export interface NewProductDraft {
 
 interface AddProductScreenProps {
   onBack: () => void;
-  onSubmit: (draft: NewProductDraft) => void;
+  onSubmit: (draft: NewProductDraft) => void | Promise<void>;
+  isSubmitting?: boolean;
+  submitErrorMessage?: string | null;
+}
+
+type ProductField = keyof NewProductDraft;
+
+function isPositiveNumber(value: string) {
+  return Number(value) > 0;
+}
+
+function isNonNegativeWholeNumber(value: string) {
+  return /^\d+$/.test(value.trim());
+}
+
+function getProductValidationErrors(draft: NewProductDraft) {
+  return {
+    name: !draft.name.trim() ? 'Product name is required.' : '',
+    sku: !draft.sku.trim() ? 'SKU or internal code is required.' : '',
+    category: !draft.category.trim() ? 'Category is required.' : '',
+    type: !draft.type.trim() ? 'Product type is required.' : '',
+    unitLabel: !draft.unitLabel.trim() ? 'Unit label is required.' : '',
+    price: !draft.price.trim()
+      ? 'Price per unit is required.'
+      : !isPositiveNumber(draft.price.trim())
+        ? 'Enter a valid price greater than 0.'
+        : '',
+    godownInventory: !draft.godownInventory.trim()
+      ? 'Godown inventory is required.'
+      : !isNonNegativeWholeNumber(draft.godownInventory)
+        ? 'Enter a valid whole number for godown inventory.'
+        : '',
+    demand: !draft.demand.trim() ? 'Demand indicator is required.' : '',
+    reorderLevel: !draft.reorderLevel.trim()
+      ? 'Reorder level is required.'
+      : !isNonNegativeWholeNumber(draft.reorderLevel)
+        ? 'Enter a valid whole number for reorder level.'
+        : '',
+    description: !draft.description.trim()
+      ? 'Product description is required.'
+      : draft.description.trim().length < 10
+        ? 'Enter a more descriptive product summary.'
+        : '',
+  } satisfies Record<ProductField, string>;
 }
 
 export function AddProductScreen({
   onBack,
   onSubmit,
+  isSubmitting = false,
+  submitErrorMessage = null,
 }: AddProductScreenProps) {
   const { t } = useTranslation();
   const palette = useAppPalette();
@@ -46,15 +97,39 @@ export function AddProductScreen({
     reorderLevel: '',
     description: '',
   });
+  const [touchedFields, setTouchedFields] = useState<
+    Partial<Record<ProductField, boolean>>
+  >({});
+  const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
 
-  const isValid = useMemo(
-    () =>
-      Object.values(draft).every(value => value.trim().length > 0),
+  const validationErrors = useMemo(
+    () => getProductValidationErrors(draft),
     [draft],
+  );
+  const hasValidationErrors = useMemo(
+    () => Object.values(validationErrors).some(Boolean),
+    [validationErrors],
   );
 
   const updateField = (field: keyof NewProductDraft, value: string) => {
     setDraft(current => ({ ...current, [field]: value }));
+  };
+
+  const markTouched = (field: ProductField) => {
+    setTouchedFields(current => ({ ...current, [field]: true }));
+  };
+
+  const shouldShowFieldError = (field: ProductField) =>
+    Boolean((didAttemptSubmit || touchedFields[field]) && validationErrors[field]);
+
+  const handleSubmit = async () => {
+    setDidAttemptSubmit(true);
+
+    if (hasValidationErrors || isSubmitting) {
+      return;
+    }
+
+    await onSubmit(draft);
   };
 
   return (
@@ -95,33 +170,67 @@ export function AddProductScreen({
           <AppInput
             value={draft.name}
             onChangeText={value => updateField('name', value)}
+            onBlur={() => markTouched('name')}
             placeholder={t('productAddNamePlaceholder')}
+            hasError={shouldShowFieldError('name')}
+          />
+          <AppFieldMessage
+            message={shouldShowFieldError('name') ? validationErrors.name : null}
           />
           <AppInput
             value={draft.sku}
             onChangeText={value => updateField('sku', value)}
+            onBlur={() => markTouched('sku')}
             placeholder={t('productAddSkuPlaceholder')}
+            hasError={shouldShowFieldError('sku')}
+          />
+          <AppFieldMessage
+            message={shouldShowFieldError('sku') ? validationErrors.sku : null}
           />
           <AppInput
             value={draft.category}
             onChangeText={value => updateField('category', value)}
+            onBlur={() => markTouched('category')}
             placeholder={t('productAddCategoryPlaceholder')}
+            hasError={shouldShowFieldError('category')}
+          />
+          <AppFieldMessage
+            message={
+              shouldShowFieldError('category') ? validationErrors.category : null
+            }
           />
           <AppInput
             value={draft.type}
             onChangeText={value => updateField('type', value)}
+            onBlur={() => markTouched('type')}
             placeholder={t('productAddTypePlaceholder')}
+            hasError={shouldShowFieldError('type')}
+          />
+          <AppFieldMessage
+            message={shouldShowFieldError('type') ? validationErrors.type : null}
           />
           <AppInput
             value={draft.price}
             onChangeText={value => updateField('price', value)}
+            onBlur={() => markTouched('price')}
             placeholder={t('productAddPricePlaceholder')}
             keyboardType="decimal-pad"
+            hasError={shouldShowFieldError('price')}
+          />
+          <AppFieldMessage
+            message={shouldShowFieldError('price') ? validationErrors.price : null}
           />
           <AppInput
             value={draft.unitLabel}
             onChangeText={value => updateField('unitLabel', value)}
+            onBlur={() => markTouched('unitLabel')}
             placeholder={t('productAddUnitPlaceholder')}
+            hasError={shouldShowFieldError('unitLabel')}
+          />
+          <AppFieldMessage
+            message={
+              shouldShowFieldError('unitLabel') ? validationErrors.unitLabel : null
+            }
           />
         </View>
       </VehicleSectionCard>
@@ -134,19 +243,42 @@ export function AddProductScreen({
           <AppInput
             value={draft.godownInventory}
             onChangeText={value => updateField('godownInventory', value)}
+            onBlur={() => markTouched('godownInventory')}
             placeholder={t('productAddGodownPlaceholder')}
             keyboardType="number-pad"
+            hasError={shouldShowFieldError('godownInventory')}
+          />
+          <AppFieldMessage
+            message={
+              shouldShowFieldError('godownInventory')
+                ? validationErrors.godownInventory
+                : null
+            }
           />
           <AppInput
             value={draft.reorderLevel}
             onChangeText={value => updateField('reorderLevel', value)}
+            onBlur={() => markTouched('reorderLevel')}
             placeholder={t('productAddReorderPlaceholder')}
             keyboardType="number-pad"
+            hasError={shouldShowFieldError('reorderLevel')}
+          />
+          <AppFieldMessage
+            message={
+              shouldShowFieldError('reorderLevel')
+                ? validationErrors.reorderLevel
+                : null
+            }
           />
           <AppInput
             value={draft.demand}
             onChangeText={value => updateField('demand', value)}
+            onBlur={() => markTouched('demand')}
             placeholder={t('productAddDemandPlaceholder')}
+            hasError={shouldShowFieldError('demand')}
+          />
+          <AppFieldMessage
+            message={shouldShowFieldError('demand') ? validationErrors.demand : null}
           />
         </View>
       </VehicleSectionCard>
@@ -159,14 +291,30 @@ export function AddProductScreen({
           <AppInput
             value={draft.description}
             onChangeText={value => updateField('description', value)}
+            onBlur={() => markTouched('description')}
             placeholder={t('productAddDescriptionPlaceholder')}
             multiline
             style={styles.descriptionInput}
+            hasError={shouldShowFieldError('description')}
+          />
+          <AppFieldMessage
+            message={
+              shouldShowFieldError('description')
+                ? validationErrors.description
+                : null
+            }
+          />
+          <AppFieldMessage
+            message={
+              didAttemptSubmit && hasValidationErrors
+                ? 'Please fix the highlighted fields before creating this product.'
+                : submitErrorMessage
+            }
           />
           <AppButton
             title={t('productAddSubmitButton')}
-            onPress={() => onSubmit(draft)}
-            disabled={!isValid}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
             style={styles.submitButton}
             textStyle={styles.submitButtonText}
           />

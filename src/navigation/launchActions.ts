@@ -7,6 +7,7 @@ export type AppLaunchAction =
   | 'addVehicle'
   | 'products'
   | 'addProduct'
+  | 'shareApp'
   | 'profile'
   | 'orders'
   | 'reviews'
@@ -67,6 +68,8 @@ export function parseLaunchRequest(url: string): AppLaunchRequest | null {
 
   if (section === 'dashboard') {
     launchAction = 'dashboard';
+  } else if (section === 'share') {
+    launchAction = 'shareApp';
   } else if (section === 'vehicles' && action === 'add') {
     launchAction = 'addVehicle';
   } else if (section === 'vehicles') {

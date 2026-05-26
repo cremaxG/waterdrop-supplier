@@ -5,7 +5,13 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { AppButton, AppIcon, AppInput, AppText } from '../../components';
+import {
+  AppButton,
+  AppFieldMessage,
+  AppIcon,
+  AppInput,
+  AppText,
+} from '../../components';
 import { VehicleSectionCard } from '../../components/vehicles';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
@@ -38,6 +44,18 @@ interface ProductDetailsScreenProps {
   onUpdateVehicleInventory: (vehicleId: string, nextQuantity: number) => void;
 }
 
+function getQuantityValidationMessage(value: string, label: string) {
+  if (!value.trim()) {
+    return `${label} is required.`;
+  }
+
+  if (!/^\d+$/.test(value.trim())) {
+    return `Enter a valid whole number for ${label.toLowerCase()}.`;
+  }
+
+  return '';
+}
+
 export function ProductDetailsScreen({
   product,
   onBack,
@@ -52,6 +70,8 @@ export function ProductDetailsScreen({
       product.vehicleInventory.map(item => [item.id, String(item.quantity)]),
     ),
   );
+  const [godownError, setGodownError] = useState('');
+  const [vehicleErrors, setVehicleErrors] = useState<Record<string, string>>({});
 
   const explicitVehicleQuantity = product.vehicleInventory.reduce(
     (total, item) => total + item.quantity,
@@ -61,6 +81,36 @@ export function ProductDetailsScreen({
     explicitVehicleQuantity > 0
       ? explicitVehicleQuantity
       : Math.max(product.totalStock - product.godownInventory, 0);
+
+  const handleGodownUpdate = () => {
+    const nextError = getQuantityValidationMessage(godownInput, 'Godown quantity');
+    setGodownError(nextError);
+
+    if (nextError) {
+      return;
+    }
+
+    const nextQuantity = Number(godownInput.trim());
+    onUpdateGodownInventory(nextQuantity);
+    setGodownInput(String(nextQuantity));
+  };
+
+  const handleVehicleUpdate = (vehicleId: string) => {
+    const rawValue = vehicleInputs[vehicleId] ?? '';
+    const nextError = getQuantityValidationMessage(rawValue, 'Vehicle quantity');
+    setVehicleErrors(current => ({ ...current, [vehicleId]: nextError }));
+
+    if (nextError) {
+      return;
+    }
+
+    const nextQuantity = Number(rawValue.trim());
+    onUpdateVehicleInventory(vehicleId, nextQuantity);
+    setVehicleInputs(current => ({
+      ...current,
+      [vehicleId]: String(nextQuantity),
+    }));
+  };
 
   return (
     <ScrollView
@@ -157,19 +207,20 @@ export function ProductDetailsScreen({
         <View style={styles.detailStack}>
           <AppInput
             value={godownInput}
-            onChangeText={setGodownInput}
+            onChangeText={value => {
+              setGodownInput(value);
+              if (godownError) {
+                setGodownError(getQuantityValidationMessage(value, 'Godown quantity'));
+              }
+            }}
             keyboardType="number-pad"
             placeholder={t('productGodownPlaceholder')}
+            hasError={Boolean(godownError)}
           />
+          <AppFieldMessage message={godownError} />
           <AppButton
             title={t('productUpdateGodownButton')}
-            onPress={() => {
-              const nextQuantity = Number(godownInput.replace(/[^\d]/g, ''));
-              onUpdateGodownInventory(Number.isNaN(nextQuantity) ? 0 : nextQuantity);
-              setGodownInput(
-                String(Number.isNaN(nextQuantity) ? 0 : nextQuantity),
-              );
-            }}
+            onPress={handleGodownUpdate}
             style={styles.primaryButton}
             textStyle={styles.primaryButtonText}
           />
@@ -213,31 +264,30 @@ export function ProductDetailsScreen({
                 <View style={styles.inventoryInputWrap}>
                   <AppInput
                     value={vehicleInputs[item.id] ?? String(item.quantity)}
-                    onChangeText={value =>
+                    onChangeText={value => {
                       setVehicleInputs(current => ({
                         ...current,
                         [item.id]: value,
-                      }))
-                    }
+                      }));
+                      if (vehicleErrors[item.id]) {
+                        setVehicleErrors(current => ({
+                          ...current,
+                          [item.id]: getQuantityValidationMessage(
+                            value,
+                            'Vehicle quantity',
+                          ),
+                        }));
+                      }
+                    }}
                     keyboardType="number-pad"
                     placeholder={t('productVehicleQuantityPlaceholder')}
+                    hasError={Boolean(vehicleErrors[item.id])}
                   />
+                  <AppFieldMessage message={vehicleErrors[item.id]} />
                 </View>
                 <AppButton
                   title={t('productVehicleUpdateButton')}
-                  onPress={() => {
-                    const nextQuantity = Number(
-                      (vehicleInputs[item.id] ?? '').replace(/[^\d]/g, ''),
-                    );
-                    onUpdateVehicleInventory(
-                      item.id,
-                      Number.isNaN(nextQuantity) ? 0 : nextQuantity,
-                    );
-                    setVehicleInputs(current => ({
-                      ...current,
-                      [item.id]: String(Number.isNaN(nextQuantity) ? 0 : nextQuantity),
-                    }));
-                  }}
+                  onPress={() => handleVehicleUpdate(item.id)}
                   style={styles.secondaryButton}
                   textStyle={styles.secondaryButtonText}
                 />

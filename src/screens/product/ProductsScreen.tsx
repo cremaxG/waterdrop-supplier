@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Easing,
   Pressable,
@@ -8,7 +7,13 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { AppButton, AppIcon, AppRefreshScrollView, AppText } from '../../components';
+import {
+  AppButton,
+  AppIcon,
+  AppRefreshScrollView,
+  AppSnackbar,
+  AppText,
+} from '../../components';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
 import { useOperations } from '../../providers/OperationsProvider';
@@ -79,12 +84,22 @@ export function ProductsScreen({
     products,
     addProduct,
     refreshProducts,
+    refreshVehicles,
     updateProductGodownInventory,
     updateProductVehicleInventory,
   } = useOperations();
   const { width } = useWindowDimensions();
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [isAddProductVisible, setAddProductVisible] = useState(false);
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  const [productSubmissionError, setProductSubmissionError] = useState<string | null>(
+    null,
+  );
+  const [isSnackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarTone, setSnackbarTone] = useState<'success' | 'error' | 'info'>(
+    'info',
+  );
   const detailTranslateX = useRef(new Animated.Value(width)).current;
   const addTranslateX = useRef(new Animated.Value(width)).current;
   const lastHandledExternalAddTokenRef = useRef<number | null>(null);
@@ -182,6 +197,7 @@ export function ProductsScreen({
 
   const openAddProduct = () => {
     addTranslateX.setValue(width);
+    setProductSubmissionError(null);
     setAddProductVisible(true);
     onDetailVisibilityChange?.(true);
 
@@ -207,11 +223,15 @@ export function ProductsScreen({
       }
 
       setAddProductVisible(false);
+      setProductSubmissionError(null);
       onDetailVisibilityChange?.(false);
     });
   };
 
   const handleAddProduct = async (draft: NewProductDraft) => {
+    setProductSubmissionError(null);
+    setIsCreatingProduct(true);
+
     try {
       const supplierResponse = await SupplierApi.getSupplierProfile();
       const supplier = unwrapSupplierProfile(supplierResponse) as { id?: number } | null;
@@ -265,12 +285,21 @@ export function ProductsScreen({
       }
 
       closeAddProduct();
+      setSnackbarMessage(response.message ?? 'Product created successfully.');
+      setSnackbarTone('success');
+      setSnackbarVisible(true);
     } catch (error: any) {
+      const nextMessage =
+        extractApiErrorMessage(error) ??
+        error?.message ??
+        'Unable to create product. Please try again.';
+      setProductSubmissionError(nextMessage);
       console.error('Create product failed', error);
-      Alert.alert(
-        'Failed to create product',
-        error?.message || 'Unable to create product. Please try again.',
-      );
+      setSnackbarMessage(nextMessage);
+      setSnackbarTone('error');
+      setSnackbarVisible(true);
+    } finally {
+      setIsCreatingProduct(false);
     }
   };
 
@@ -281,11 +310,35 @@ export function ProductsScreen({
     updateProductGodownInventory(selectedProductId, nextQuantity);
   };
 
-  const updateVehicleInventory = (vehicleId: string, nextQuantity: number) => {
+  const updateVehicleInventory = async (vehicleId: string, nextQuantity: number) => {
     if (!selectedProductId) {
       return;
     }
-    updateProductVehicleInventory(selectedProductId, vehicleId, nextQuantity);
+
+    const numericVehicleId = Number(vehicleId);
+    const numericProductId = Number(selectedProductId);
+
+    if (!Number.isFinite(numericVehicleId) || !Number.isFinite(numericProductId)) {
+      updateProductVehicleInventory(selectedProductId, vehicleId, nextQuantity);
+      return;
+    }
+
+    try {
+      await SupplierApi.upsertVehicleProduct(numericVehicleId, {
+        product_id: numericProductId,
+        qty: nextQuantity,
+      });
+      await Promise.all([refreshProducts(), refreshVehicles()]);
+    } catch (error: any) {
+      const nextMessage =
+        extractApiErrorMessage(error) ??
+        error?.message ??
+        'Unable to update vehicle inventory. Please try again.';
+      console.error('Update vehicle product inventory failed', error);
+      setSnackbarMessage(nextMessage);
+      setSnackbarTone('error');
+      setSnackbarVisible(true);
+    }
   };
 
   return (
@@ -543,9 +596,21 @@ export function ProductsScreen({
           <AddProductScreen
             onBack={closeAddProduct}
             onSubmit={handleAddProduct}
+            isSubmitting={isCreatingProduct}
+            submitErrorMessage={productSubmissionError}
           />
         </Animated.View>
       ) : null}
+
+      <AppSnackbar
+        visible={isSnackbarVisible}
+        message={snackbarMessage}
+        tone={snackbarTone}
+        onHide={() => {
+          setSnackbarVisible(false);
+          setSnackbarMessage('');
+        }}
+      />
     </View>
   );
 }

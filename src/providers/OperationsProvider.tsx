@@ -119,12 +119,14 @@ function normalizeVehicle(item: any): VehicleRecord {
   const history = Array.isArray(item.history) ? item.history : [];
   const vehicleId = String(item.id ?? item.vehicle_number ?? 'unknown-vehicle');
   const metadata = getStoredVehicleMetadata(vehicleId) ?? {};
+  const apiStatus = item.reviewStatus ?? item.status ?? 'pending_review';
+  const reviewStatus = apiStatus === 'approved' ? 'approved' : 'pending';
 
   return {
     id: vehicleId,
     name: item.name ?? item.vehicle_number ?? 'Unnamed vehicle',
     route: item.route ?? item.vehicle_number ?? 'Unknown route',
-    capacity: item.capacity ?? metadata.capacity ?? 'N/A',
+    capacity: item.capacity ?? item.load_capacity ?? metadata.capacity ?? 'N/A',
     currentLocation:
       item.currentLocation ||
       [item.lat, item.lng].filter(Boolean).join(', ') ||
@@ -139,6 +141,7 @@ function normalizeVehicle(item: any): VehicleRecord {
     driverLicenseNumber:
       item.driverLicenseNumber ??
       item.driver_license_number ??
+      item.driver_licence_no ??
       metadata.driverLicenseNumber ??
       '',
     driverRating: item.driverRating ?? 'N/A',
@@ -152,9 +155,7 @@ function normalizeVehicle(item: any): VehicleRecord {
     nextService: item.nextService ?? '',
     etaToHub: item.etaToHub ?? '',
     isOnline: Boolean(item.online ?? item.isOnline),
-    reviewStatus: (item.reviewStatus ?? item.status ?? 'pending') as
-      | 'approved'
-      | 'pending',
+    reviewStatus,
     products,
     history,
   };

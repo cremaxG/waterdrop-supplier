@@ -81,12 +81,21 @@ object AppShortcutPublisher {
       ),
       shortcut(
         context = context,
+        id = "share_app",
+        shortLabel = "Share App",
+        longLabel = "Invite suppliers to WaterSupplier",
+        uri = "watersupplier://shortcut/share",
+        iconRes = R.drawable.ic_shortcut_share,
+        rank = 3,
+      ),
+      shortcut(
+        context = context,
         id = "open_fleet",
         shortLabel = "Open Fleet",
         longLabel = fleetSubtitle,
         uri = "watersupplier://shortcut/vehicles",
         iconRes = R.drawable.ic_shortcut_fleet,
-        rank = 3,
+        rank = 4,
       ),
       shortcut(
         context = context,
@@ -95,7 +104,7 @@ object AppShortcutPublisher {
         longLabel = productsSubtitle,
         uri = "watersupplier://shortcut/products",
         iconRes = R.drawable.ic_shortcut_product,
-        rank = 4,
+        rank = 5,
       ),
     )
 

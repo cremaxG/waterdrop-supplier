@@ -8,6 +8,8 @@
     <string name="shortcut_open_products_long">Open your product catalog</string>
     <string name="shortcut_view_orders_short">View orders</string>
     <string name="shortcut_view_orders_long">Open supplier orders</string>
+    <string name="shortcut_share_app_short">Share app</string>
+    <string name="shortcut_share_app_long">Invite suppliers to WaterSupplier</string>
     <string name="shortcut_open_fleet_short">Open fleet</string>
     <string name="shortcut_open_fleet_long">Review your fleet dashboard</string>
     <string name="widget_title">WaterDrop Hub</string>

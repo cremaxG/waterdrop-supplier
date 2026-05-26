@@ -5,19 +5,15 @@ import {
   AppLaunchRequest,
   parseLaunchRequest,
 } from './launchActions';
-import {
-  clearTempToken,
-  getTempToken,
-  setTempToken,
-} from '../storage/session';
 import { MainTabNavigator } from './MainTabNavigator';
+import { getStorage } from '../utils/Storage';
 
 export function AppNavigator() {
-  const [tempToken, setSessionToken] = useState<string | null>(() =>
-    getTempToken(),
+  const [authToken, setAuthToken] = useState<string | null>(() =>
+    getStorage().getString('authToken') ?? null,
   );
   const [launchRequest, setLaunchRequest] = useState<AppLaunchRequest | null>(null);
-  const isSignedIn = Boolean(tempToken);
+  const isSignedIn = Boolean(authToken);
 
   useEffect(() => {
     const applyLaunchUrl = (url: string | null) => {
@@ -49,13 +45,8 @@ export function AppNavigator() {
   if (!isSignedIn) {
     return (
       <AuthScreen
-        onSignIn={identifier => {
-          const nextTempToken = `temp_${identifier}_${Date.now()}`;
-          console.log(
-            `Signing in as ${identifier} using temp token ${nextTempToken}`,
-          );
-          setTempToken(nextTempToken);
-          setSessionToken(nextTempToken);
+        onSignIn={token => {
+          setAuthToken(token);
         }}
       />
     );
@@ -65,8 +56,8 @@ export function AppNavigator() {
     <MainTabNavigator
       launchRequest={launchRequest}
       onLogout={() => {
-        clearTempToken();
-        setSessionToken(null);
+        getStorage().remove('authToken');
+        setAuthToken(null);
       }}
     />
   );

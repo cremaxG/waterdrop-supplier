@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton, AppIcon, AppSheet, AppText } from '../components';
 import { ProfileDetailRow } from '../components/profile';
 import { useAppPalette } from '../hooks/useAppPalette';
+import { shareApp } from '../native/shareApp';
 import { useTheme, useTranslation } from '../providers/AppProviders';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { ProductsScreen } from '../screens/product/ProductsScreen';
@@ -103,6 +104,17 @@ export function MainTabNavigator({
     }
 
     lastHandledLaunchIdRef.current = launchRequest.id;
+
+    if (launchRequest.action === 'shareApp') {
+      setVehicleDetailsVisible(false);
+      setProductDetailsVisible(false);
+      setActiveProfileResource(null);
+
+      shareApp().catch(error => {
+        console.warn('Unable to share app from shortcut', error);
+      });
+      return;
+    }
 
     const nextTab = getTabForLaunchAction(launchRequest.action);
     const nextProfileResource = getProfileResourceForLaunchAction(

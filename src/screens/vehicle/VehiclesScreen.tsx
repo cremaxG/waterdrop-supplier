@@ -81,6 +81,10 @@ export function VehiclesScreen({
     null,
   );
   const [isAddVehicleVisible, setAddVehicleVisible] = useState(false);
+  const [isCreatingVehicle, setIsCreatingVehicle] = useState(false);
+  const [vehicleSubmissionError, setVehicleSubmissionError] = useState<string | null>(
+    null,
+  );
   const [isSnackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarTone, setSnackbarTone] = useState<'success' | 'error' | 'info'>(
@@ -300,6 +304,7 @@ export function VehiclesScreen({
 
   const openAddVehicle = () => {
     addVehicleTranslateX.setValue(width);
+    setVehicleSubmissionError(null);
     setAddVehicleVisible(true);
     onDetailVisibilityChange?.(true);
 
@@ -325,6 +330,7 @@ export function VehiclesScreen({
       }
 
       setAddVehicleVisible(false);
+      setVehicleSubmissionError(null);
       onDetailVisibilityChange?.(false);
       if (typeof onClosed === 'function') {
         onClosed();
@@ -333,6 +339,9 @@ export function VehiclesScreen({
   };
 
   const handleAddVehicle = async (draft: NewVehicleDraft) => {
+    setVehicleSubmissionError(null);
+    setIsCreatingVehicle(true);
+
     try {
       const profileResponse = await SupplierApi.getSupplierProfile();
       const profile = unwrapSupplierProfile(profileResponse);
@@ -350,12 +359,16 @@ export function VehiclesScreen({
 
       const payload = {
         phone: draft.phone.trim(),
-        email: draft.email.trim(),
+        email: draft.email.trim() || undefined,
         supplier_id: profile.id,
         vehicle_number: draft.vehicleNumber.trim(),
+        load_capacity: draft.capacity.trim(),
+        driver_licence_no: draft.driverLicenseNumber.trim(),
         name: draft.name.trim(),
         lat: supplierLat,
         lng: supplierLng,
+        status: 'pending_review' as const,
+        online: false,
       };
 
       const createVehicleResponse = await SupplierApi.createVehicle(payload);
@@ -381,7 +394,7 @@ export function VehiclesScreen({
         id: nextVehicleId,
         name: response.name ?? draft.name.trim(),
         route: response.vehicle_number ?? draft.vehicleNumber.trim(),
-        capacity: draft.capacity.trim(),
+        capacity: response.load_capacity ?? draft.capacity.trim(),
         currentLocation:
           [response.lat ?? supplierLat, response.lng ?? supplierLng]
             .filter(Boolean)
@@ -389,7 +402,8 @@ export function VehiclesScreen({
         driverName: 'Assigned driver',
         driverPhone: response.phone ?? draft.phone.trim(),
         driverEmail: response.email ?? draft.email.trim(),
-        driverLicenseNumber: draft.driverLicenseNumber.trim(),
+        driverLicenseNumber:
+          response.driver_licence_no ?? draft.driverLicenseNumber.trim(),
         driverRating: t('vehicleAddPendingValue'),
         shiftWindow: '',
         earningsToday: '₹0',
@@ -422,13 +436,16 @@ export function VehiclesScreen({
         setSnackbarVisible(true);
       });
     } catch (error: any) {
-      setSnackbarMessage(
+      const nextMessage =
         extractApiErrorMessage(error) ??
-          error?.message ??
-          t('vehicleAddErrorSnackbar'),
-      );
+        error?.message ??
+        t('vehicleAddErrorSnackbar');
+      setVehicleSubmissionError(nextMessage);
+      setSnackbarMessage(nextMessage);
       setSnackbarTone('error');
       setSnackbarVisible(true);
+    } finally {
+      setIsCreatingVehicle(false);
     }
   };
 
@@ -754,6 +771,8 @@ export function VehiclesScreen({
           <AddVehicleScreen
             onBack={() => closeAddVehicle()}
             onSubmit={handleAddVehicle}
+            isSubmitting={isCreatingVehicle}
+            submitErrorMessage={vehicleSubmissionError}
           />
         </Animated.View>
       ) : null}

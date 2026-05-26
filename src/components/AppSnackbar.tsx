@@ -94,7 +94,7 @@ export function AppSnackbar({
     tone === 'success'
       ? palette.success
       : tone === 'error'
-        ? '#DC2626'
+        ? palette.error
         : palette.accentStrong;
 
   return (
