@@ -36,6 +36,16 @@ function extractCollection(response: any, key?: string) {
   return [];
 }
 
+function hasApiFailure(response: any) {
+  return Boolean(
+    !response ||
+      response.success === false ||
+      response.error ||
+      (typeof response.status === 'number' && response.status >= 400) ||
+      (typeof response.statusCode === 'number' && response.statusCode >= 400),
+  );
+}
+
 function toNumber(value: any) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
@@ -260,7 +270,7 @@ interface OperationsState {
 interface OperationsContextValue extends OperationsState {
   addVehicle: (vehicle: VehicleRecord) => void;
   refreshVehicles: () => Promise<void>;
-  toggleVehicleAvailability: (vehicleId: string) => void;
+  toggleVehicleAvailability: (vehicleId: string) => Promise<void>;
   addProduct: (product: ProductRecord) => void;
   refreshProducts: () => Promise<void>;
   updateProductGodownInventory: (productId: string, nextQuantity: number) => void;
@@ -296,7 +306,7 @@ export function OperationsProvider({
     const loadOperations = async () => {
       try {
         const [vehicleResponse, productsData] = await Promise.all([
-          SupplierApi.listVehicles(),
+          SupplierApi.listSupplierVehicles('me', { filter: 'all' }),
           loadProducts(),
         ]);
 
@@ -339,7 +349,9 @@ export function OperationsProvider({
   }, [state.products.length, state.vehicles]);
 
   const refreshVehicles = async () => {
-    const vehicleResponse = await SupplierApi.listVehicles();
+    const vehicleResponse = await SupplierApi.listSupplierVehicles('me', {
+      filter: 'all',
+    });
     const vehiclesData = extractCollection(vehicleResponse, 'vehicles');
     const normalizedVehicles = vehiclesData.map(normalizeVehicle);
 
@@ -376,7 +388,24 @@ export function OperationsProvider({
     }));
   };
 
-  const toggleVehicleAvailability = (vehicleId: string) => {
+  const toggleVehicleAvailability = async (vehicleId: string) => {
+    const targetVehicle = state.vehicles.find(vehicle => vehicle.id === vehicleId);
+    if (!targetVehicle || targetVehicle.reviewStatus === 'pending') {
+      return;
+    }
+
+    const availabilityResponse = await SupplierApi.setVehicleAvailability(
+      vehicleId,
+      !targetVehicle.isOnline,
+    );
+    if (hasApiFailure(availabilityResponse)) {
+      throw new Error(
+        availabilityResponse?.message ??
+          availabilityResponse?.error ??
+          'Unable to update vehicle availability.',
+      );
+    }
+
     setState(current => ({
       ...current,
       vehicles: current.vehicles.map(vehicle => {

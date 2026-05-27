@@ -1,12 +1,11 @@
 import React from 'react';
 import {
   Linking,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import { AppButton, AppIcon, AppText } from '../../components';
+import { AppBackButton, AppButton, AppIcon, AppText } from '../../components';
 import {
   VehicleProductRow,
   VehicleSectionCard,
@@ -113,12 +112,7 @@ export function VehicleDetailsScreen({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      <Pressable onPress={onBack} style={styles.backRow}>
-        <AppIcon name="back" size={18} color={palette.accentStrong} />
-        <AppText style={[styles.backText, { color: palette.accentStrong }]}>
-          {t('vehicleBackButton')}
-        </AppText>
-      </Pressable>
+      <AppBackButton onPress={onBack} label={t('vehicleBackButton')} />
 
       <View
         style={[
@@ -402,18 +396,9 @@ export function VehicleDetailsScreen({
 
 const styles = StyleSheet.create({
   contentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
     paddingBottom: 32,
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-    gap: 8,
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   heroCard: {
     borderWidth: 1,

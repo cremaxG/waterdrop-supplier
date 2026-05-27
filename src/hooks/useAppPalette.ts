@@ -17,6 +17,7 @@ export function useAppPalette() {
     accentStrong: isDark ? '#22D3EE' : '#0369A1',
     accentSoft: isDark ? 'rgba(34, 211, 238, 0.14)' : '#DFF6FF',
     accentSoftBorder: isDark ? 'rgba(56, 189, 248, 0.26)' : '#B8E6FB',
+    error: isDark ? '#FCA5A5' : '#DC2626',
     success: isDark ? '#34D399' : '#059669',
     warning: isDark ? '#FBBF24' : '#D97706',
     heroTop: isDark ? 'rgba(34, 211, 238, 0.18)' : 'rgba(14, 165, 233, 0.16)',

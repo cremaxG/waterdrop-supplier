@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   PressableProps,
   StyleProp,
@@ -17,6 +18,7 @@ export interface AppButtonProps extends PressableProps {
   i18nKey?: string;
   title?: string;
   variant?: AppButtonVariant;
+  loading?: boolean;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
 }
@@ -26,6 +28,7 @@ export function AppButton({
   title,
   children,
   variant = 'secondary',
+  loading = false,
   style,
   textStyle,
   disabled,
@@ -56,6 +59,7 @@ export function AppButton({
         ? 'transparent'
         : palette.border;
   const labelColor = isPrimary || isDanger ? '#FFFFFF' : palette.text;
+  const isDisabled = disabled || loading;
 
   return (
     <Pressable
@@ -64,7 +68,7 @@ export function AppButton({
         {
           backgroundColor,
           borderColor,
-          opacity: disabled ? 0.5 : pressed ? 0.9 : 1,
+          opacity: isDisabled ? 0.5 : pressed ? 0.9 : 1,
           transform: [{ scale: pressed ? 0.99 : 1 }],
           shadowColor: isPrimary || isDanger ? palette.shadow : 'transparent',
           shadowOpacity: pressed ? 0.12 : isPrimary || isDanger ? 0.18 : 0,
@@ -77,18 +81,26 @@ export function AppButton({
         },
         style,
       ]}
-      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      disabled={isDisabled}
       {...rest}
     >
-      <Text
-        style={[
-          styles.text,
-          { color: disabled ? palette.muted : labelColor },
-          textStyle,
-        ]}
-      >
-        {label}
-      </Text>
+      {loading ? (
+        <ActivityIndicator
+          color={isPrimary || isDanger ? '#FFFFFF' : palette.accentStrong}
+        />
+      ) : (
+        <Text
+          style={[
+            styles.text,
+            { color: disabled ? palette.muted : labelColor },
+            textStyle,
+          ]}
+        >
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
 }

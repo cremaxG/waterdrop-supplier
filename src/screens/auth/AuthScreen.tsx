@@ -7,14 +7,21 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  SafeAreaView,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppButton, AppCountryPicker, AppInput, AppText } from '../../components';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  AppBackButton,
+  AppButton,
+  AppCountryPicker,
+  AppInput,
+  AppText,
+} from '../../components';
 import { Country, DEFAULT_COUNTRY } from '../../constants/countries';
 import { useTheme, useTranslation } from '../../providers/AppProviders';
 import SupplierApi from '../../service/supplierApi';
@@ -24,23 +31,28 @@ const APP_LOGO = require('../../../assets/splash/appIcon.png');
 
 type SupplierLoginMethod = 'password' | 'otp';
 type LoginField = 'phone' | 'password' | 'otp';
-type ForgotPasswordField = 'phone' | 'otp';
+type ForgotPasswordField = 'phone' | 'otp' | 'password' | 'confirmPassword';
 type RegisterField =
   | 'name'
   | 'phone'
   | 'email'
   | 'password'
+  | 'confirmPassword'
   | 'gstin'
   | 'cin'
   | 'address1'
   | 'address2'
   | 'city'
   | 'postalCode'
-  | 'state'
-  | 'lat'
-  | 'lng'
-  | 'status'
-  | 'ratings';
+  | 'state';
+type SubmitAction =
+  | 'password-login'
+  | 'login-request-otp'
+  | 'login-otp'
+  | 'supplier-register'
+  | 'forgot-request-otp'
+  | 'forgot-reset'
+  | null;
 
 export interface AuthScreenProps {
   onSignIn?: (token: string) => void;
@@ -57,13 +69,16 @@ function isValidPhone(value: string) {
   return value.replace(/\D/g, '').length === 10;
 }
 
-function isValidCoordinate(value: string, min: number, max: number) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) && numeric >= min && numeric <= max;
-}
-
 function getResponseMessage(response: any, fallback: string) {
   return response?.message ?? response?.error?.message ?? response?.data?.message ?? fallback;
+}
+
+function getThrownMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
 }
 
 function hasResponseError(response: any) {
@@ -86,13 +101,231 @@ function hasResponseError(response: any) {
   return false;
 }
 
+function sanitizeOtpCandidate(value: unknown) {
+  if (value == null) {
+    return null;
+  }
+
+  const otpString = String(value).replace(/\D/g, '');
+  if (otpString.length < 4 || otpString.length > 8) {
+    return null;
+  }
+
+  return otpString;
+}
+
+function extractOtpFromText(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const patterns = [
+    /\botp(?:\s*(?:is|code|:|=|-))?\s*(\d{4,8})\b/i,
+    /\bverification(?:\s*code)?(?:\s*(?:is|:|=|-))?\s*(\d{4,8})\b/i,
+    /\bcode(?:\s*(?:is|:|=|-))?\s*(\d{4,8})\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    const otp = sanitizeOtpCandidate(match?.[1]);
+    if (otp) {
+      return otp;
+    }
+  }
+
+  return null;
+}
+
+function extractOtpFromResponse(response: any) {
+  const stringifiedResponse =
+    response && typeof response === 'object'
+      ? JSON.stringify(response)
+      : typeof response === 'string'
+        ? response
+        : '';
+
+  const directCandidates = [
+    response?.otp,
+    response?.data?.otp,
+    response?.data?.data?.otp,
+    response?.verification_code,
+    response?.verificationCode,
+    response?.data?.verification_code,
+    response?.data?.verificationCode,
+    response?.data?.code,
+    response?.code,
+  ];
+
+  for (const candidate of directCandidates) {
+    const otp = sanitizeOtpCandidate(candidate);
+    if (otp) {
+      return otp;
+    }
+  }
+
+  const visited = new WeakSet<object>();
+  const queue: any[] = [response];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    const fromText = extractOtpFromText(current);
+    if (fromText) {
+      return fromText;
+    }
+
+    if (typeof current !== 'object') {
+      continue;
+    }
+
+    if (visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      const normalizedKey = key.toLowerCase();
+
+      if (
+        normalizedKey.includes('otp') ||
+        normalizedKey.includes('code') ||
+        normalizedKey.includes('message')
+      ) {
+        const directOtp =
+          sanitizeOtpCandidate(value) ?? extractOtpFromText(value);
+        if (directOtp) {
+          return directOtp;
+        }
+      }
+
+      if (value && typeof value === 'object') {
+        queue.push(value);
+      } else if (typeof value === 'string') {
+        queue.push(value);
+      }
+    }
+  }
+
+  const fallbackOtpPatterns = [
+    /"otp"\s*:\s*"?(\d{4,8})"?/i,
+    /"verification[_\s-]?code"\s*:\s*"?(\d{4,8})"?/i,
+    /"code"\s*:\s*"?(\d{4,8})"?/i,
+  ];
+
+  for (const pattern of fallbackOtpPatterns) {
+    const otp = sanitizeOtpCandidate(stringifiedResponse.match(pattern)?.[1]);
+    if (otp) {
+      return otp;
+    }
+  }
+
+  const genericOtp = sanitizeOtpCandidate(
+    stringifiedResponse.match(/\b(\d{4,8})\b/)?.[1],
+  );
+  if (genericOtp) {
+    return genericOtp;
+  }
+
+  return null;
+}
+
+function formatPhoneWithCountry(phone: string, countryDialCode: string) {
+  const digits = String(phone).replace(/\D/g, '');
+  if (!digits) {
+    return '';
+  }
+
+  return `${countryDialCode}${digits}`;
+}
+
+function maskPhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length <= 4) {
+    return value;
+  }
+
+  const tail = digits.slice(-4);
+  const maskedPrefix = digits
+    .slice(0, -4)
+    .replace(/\d/g, '•')
+    .replace(/(.{3})/g, '$1 ')
+    .trim();
+
+  return `${maskedPrefix} ${tail}`.trim();
+}
+
+interface OtpPinInputProps {
+  value: string;
+  onChangeText: (value: string) => void;
+  error?: boolean;
+  disabled?: boolean;
+}
+
+function OtpPinInput({ value, onChangeText, error, disabled }: OtpPinInputProps) {
+  const inputRef = useRef<TextInput | null>(null);
+  const [isFocused, setFocused] = useState(false);
+  const paddedValue = value.padEnd(6, ' ');
+  const digits = paddedValue.split('');
+
+  return (
+    <Pressable
+      onPress={() => {
+        if (!disabled) {
+          inputRef.current?.focus();
+        }
+      }}
+      style={styles.otpPinContainer}
+    >
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={nextValue => {
+          const sanitized = String(nextValue).replace(/\D/g, '').slice(0, 6);
+          onChangeText(sanitized);
+        }}
+        keyboardType="number-pad"
+        textContentType="oneTimeCode"
+        autoComplete="sms-otp"
+        maxLength={6}
+        editable={!disabled}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={styles.otpHiddenInput}
+      />
+      <View style={styles.otpPinRow}>
+        {digits.map((digit, index) => (
+          <View
+            key={index}
+            style={[
+              styles.otpPinCell,
+              isFocused && styles.otpPinCellFocused,
+              error && styles.otpPinCellError,
+            ]}
+          >
+            <AppText style={styles.otpPinText}>
+              {digit !== ' ' ? digit : ''}
+            </AppText>
+          </View>
+        ))}
+      </View>
+    </Pressable>
+  );
+}
+
 export function AuthScreen({
   onSignIn,
   titleKey = 'signInTitle',
 }: AuthScreenProps) {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const isDark = theme.statusBarStyle === 'light-content';
   const palette = {
     screenBackground: isDark ? '#08111F' : '#ECFEFF',
@@ -119,20 +352,26 @@ export function AuthScreen({
   const forgotCardProgress = useRef(new Animated.Value(0)).current;
 
   const [loginMethod, setLoginMethod] = useState<SupplierLoginMethod>('password');
+  const [loginCountry, setLoginCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [forgotPasswordCountry, setForgotPasswordCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [loginPhone, setLoginPhone] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [otpRequested, setOtpRequested] = useState(false);
   const [showSupplierRegistration, setShowSupplierRegistration] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [forgotPasswordPhone, setForgotPasswordPhone] = useState('');
   const [forgotPasswordOtp, setForgotPasswordOtp] = useState('');
+  const [forgotPasswordPassword, setForgotPasswordPassword] = useState('');
+  const [forgotPasswordConfirmPassword, setForgotPasswordConfirmPassword] = useState('');
   const [forgotPasswordOtpRequested, setForgotPasswordOtpRequested] = useState(false);
   const [supplierCountry, setSupplierCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierEmail, setSupplierEmail] = useState('');
   const [supplierPassword, setSupplierPassword] = useState('');
+  const [supplierConfirmPassword, setSupplierConfirmPassword] = useState('');
   const [supplierGstin, setSupplierGstin] = useState('');
   const [supplierCin, setSupplierCin] = useState('');
   const [supplierAddressLine1, setSupplierAddressLine1] = useState('');
@@ -140,10 +379,7 @@ export function AuthScreen({
   const [supplierCity, setSupplierCity] = useState('');
   const [supplierPostalCode, setSupplierPostalCode] = useState('');
   const [supplierState, setSupplierState] = useState('');
-  const [supplierLat, setSupplierLat] = useState('');
-  const [supplierLng, setSupplierLng] = useState('');
-  const [supplierStatus, setSupplierStatus] = useState('pending');
-  const [supplierRatings, setSupplierRatings] = useState('0');
+  const [submitAction, setSubmitAction] = useState<SubmitAction>(null);
   const [loginTouched, setLoginTouched] = useState<Partial<Record<LoginField, boolean>>>({});
   const [forgotPasswordTouched, setForgotPasswordTouched] = useState<
     Partial<Record<ForgotPasswordField, boolean>>
@@ -158,6 +394,10 @@ export function AuthScreen({
   const normalizedLoginPhone = loginPhone.replace(/\D/g, '');
   const normalizedForgotPasswordPhone = forgotPasswordPhone.replace(/\D/g, '');
   const normalizedSupplierPhone = supplierPhone.replace(/\D/g, '');
+  const formattedLoginPhone = formatPhoneWithCountry(normalizedLoginPhone, loginCountry.dialCode);
+  const formattedForgotPasswordPhone = formatPhoneWithCountry(normalizedForgotPasswordPhone, forgotPasswordCountry.dialCode);
+  const maskedLoginPhone = maskPhoneNumber(formattedLoginPhone);
+  const maskedForgotPasswordPhone = maskPhoneNumber(formattedForgotPasswordPhone);
   const normalizedGstin = supplierGstin.trim().toUpperCase();
   const normalizedCin = supplierCin.trim().toUpperCase();
 
@@ -253,7 +493,7 @@ export function AuthScreen({
         loginMethod === 'otp'
           ? !otp.trim()
             ? 'OTP is required.'
-            : otp.trim().length < 4
+            : otp.trim().length < 6
               ? 'Enter a valid OTP.'
               : ''
           : '',
@@ -286,6 +526,12 @@ export function AuthScreen({
           ? 'Password is required.'
           : supplierPassword.trim().length < 6
             ? 'Password must be at least 6 characters.'
+            : '',
+      confirmPassword:
+        !supplierConfirmPassword.trim()
+          ? 'Please confirm your password.'
+          : supplierConfirmPassword.trim() !== supplierPassword.trim()
+            ? 'Passwords do not match.'
             : '',
       gstin:
         !normalizedGstin
@@ -325,25 +571,6 @@ export function AuthScreen({
           : supplierState.trim().length < 2
             ? 'Enter a valid state.'
             : '',
-      lat:
-        supplierLat.trim() && !isValidCoordinate(supplierLat.trim(), -90, 90)
-          ? 'Latitude must be between -90 and 90.'
-          : '',
-      lng:
-        supplierLng.trim() && !isValidCoordinate(supplierLng.trim(), -180, 180)
-          ? 'Longitude must be between -180 and 180.'
-          : '',
-      status:
-        supplierStatus.trim() && supplierStatus.trim().length < 3
-          ? 'Enter a valid status.'
-          : '',
-      ratings:
-        supplierRatings.trim() &&
-        (!Number.isFinite(Number(supplierRatings.trim())) ||
-          Number(supplierRatings.trim()) < 0 ||
-          Number(supplierRatings.trim()) > 5)
-          ? 'Ratings must be between 0 and 5.'
-          : '',
     }),
     [
       normalizedCin,
@@ -352,15 +579,12 @@ export function AuthScreen({
       supplierAddressLine1,
       supplierAddressLine2,
       supplierCity,
+      supplierConfirmPassword,
       supplierEmail,
-      supplierLat,
-      supplierLng,
       supplierName,
       supplierPassword,
       supplierPostalCode,
-      supplierRatings,
       supplierState,
-      supplierStatus,
     ],
   );
 
@@ -376,12 +600,35 @@ export function AuthScreen({
         forgotPasswordOtpRequested
           ? !forgotPasswordOtp.trim()
             ? 'OTP is required.'
-            : forgotPasswordOtp.trim().length < 4
+            : forgotPasswordOtp.trim().length < 6
               ? 'Enter a valid OTP.'
               : ''
           : '',
+      password:
+        showResetPassword
+          ? !forgotPasswordPassword.trim()
+            ? 'Password is required.'
+            : forgotPasswordPassword.trim().length < 6
+              ? 'Password must be at least 6 characters.'
+              : ''
+          : '',
+      confirmPassword:
+        showResetPassword
+          ? !forgotPasswordConfirmPassword.trim()
+            ? 'Please confirm your password.'
+            : forgotPasswordConfirmPassword.trim() !== forgotPasswordPassword.trim()
+              ? 'Passwords do not match.'
+              : ''
+          : '',
     }),
-    [forgotPasswordOtp, forgotPasswordOtpRequested, normalizedForgotPasswordPhone],
+    [
+      forgotPasswordConfirmPassword,
+      forgotPasswordOtp,
+      forgotPasswordOtpRequested,
+      forgotPasswordPassword,
+      normalizedForgotPasswordPhone,
+      showResetPassword,
+    ],
   );
 
   const isPasswordLoginDisabled =
@@ -390,8 +637,15 @@ export function AuthScreen({
   const isOtpLoginDisabled = Boolean(loginErrors.phone) || Boolean(loginErrors.otp);
   const isForgotPasswordRequestDisabled = Boolean(forgotPasswordErrors.phone);
   const isForgotPasswordVerifyDisabled =
-    Boolean(forgotPasswordErrors.phone) || Boolean(forgotPasswordErrors.otp);
+    Boolean(forgotPasswordErrors.phone) ||
+    Boolean(forgotPasswordErrors.otp);
+  const isForgotPasswordResetDisabled =
+    Boolean(forgotPasswordErrors.phone) ||
+    Boolean(forgotPasswordErrors.otp) ||
+    Boolean(forgotPasswordErrors.password) ||
+    Boolean(forgotPasswordErrors.confirmPassword);
   const isRegisterDisabled = Object.values(registerErrors).some(Boolean);
+  const isBusy = submitAction !== null;
 
   const loginHeaderAnimatedStyle = {
     opacity: loginHeaderProgress,
@@ -516,6 +770,7 @@ export function AuthScreen({
     setSupplierPhone('');
     setSupplierEmail('');
     setSupplierPassword('');
+    setSupplierConfirmPassword('');
     setSupplierGstin('');
     setSupplierCin('');
     setSupplierAddressLine1('');
@@ -523,10 +778,6 @@ export function AuthScreen({
     setSupplierCity('');
     setSupplierPostalCode('');
     setSupplierState('');
-    setSupplierLat('');
-    setSupplierLng('');
-    setSupplierStatus('pending');
-    setSupplierRatings('0');
     setRegisterTouched({});
     setDidAttemptRegister(false);
   };
@@ -538,7 +789,10 @@ export function AuthScreen({
   const resetForgotPasswordForm = () => {
     setForgotPasswordPhone('');
     setForgotPasswordOtp('');
+    setForgotPasswordPassword('');
+    setForgotPasswordConfirmPassword('');
     setForgotPasswordOtpRequested(false);
+    setShowResetPassword(false);
     setForgotPasswordTouched({});
     setDidAttemptForgotPassword(false);
   };
@@ -582,76 +836,110 @@ export function AuthScreen({
   };
 
   const handlePasswordLogin = async () => {
-    
     setDidAttemptLogin(true);
-    if (isPasswordLoginDisabled) {
+    if (isPasswordLoginDisabled || isBusy) {
       return;
     }
 
-    const response = await SupplierApi.loginSupplier({
-      phone: normalizedLoginPhone,
-      password: password.trim(),
-    });
-    console.log('handlePasswordLogin', response);
-    if (completeLogin(response)) {
-      return;
-    }
+    setSubmitAction('password-login');
+    try {
+      const response = await SupplierApi.loginSupplier({
+        phone: formattedLoginPhone,
+        password: password.trim(),
+      });
+      console.log('handlePasswordLogin', response);
+      if (completeLogin(response)) {
+        return;
+      }
 
-    Alert.alert(
-      'Login failed',
-      getResponseMessage(response, 'Invalid login credentials.'),
-    );
+      Alert.alert(
+        'Login failed',
+        getResponseMessage(response, 'Invalid login credentials.'),
+      );
+    } catch (error) {
+      Alert.alert(
+        'Login failed',
+        getThrownMessage(error, 'Unable to sign in right now. Please try again.'),
+      );
+    } finally {
+      setSubmitAction(null);
+    }
   };
 
   const handleRequestOtp = async () => {
     setDidAttemptLogin(true);
-    if (isOtpRequestDisabled) {
+    if (isOtpRequestDisabled || isBusy) {
       return;
     }
 
-    const response = await SupplierApi.requestOtp({
-      phone: normalizedLoginPhone,
-    });
+    setSubmitAction('login-request-otp');
+    try {
+      const response = await SupplierApi.requestOtp({
+        phone: formattedLoginPhone,
+      });
 
-    console.log('handleRequestOtp', response);
-    if (hasResponseError(response)) {
+      console.log('handleRequestOtp', response);
+      if (hasResponseError(response)) {
+        Alert.alert(
+          'OTP request failed',
+          getResponseMessage(response, 'Unable to send OTP. Please try again.'),
+        );
+        return;
+      }
+
+      setOtpRequested(true);
+
+      const requestedOtp = extractOtpFromResponse(response);
+      if (requestedOtp) {
+        setOtp(requestedOtp);
+      }
+
+      Alert.alert(
+        'OTP sent',
+        getResponseMessage(response, 'Enter the OTP sent to your phone to continue.'),
+      );
+    } catch (error) {
       Alert.alert(
         'OTP request failed',
-        getResponseMessage(response, 'Unable to send OTP. Please try again.'),
+        getThrownMessage(error, 'Unable to send OTP right now. Please try again.'),
       );
-      return;
+    } finally {
+      setSubmitAction(null);
     }
-
-    setOtpRequested(true);
-    Alert.alert(
-      'OTP sent',
-      getResponseMessage(response, 'Enter the OTP sent to your phone to continue.'),
-    );
   };
 
   const handleOtpLogin = async () => {
     setDidAttemptLogin(true);
-    if (isOtpLoginDisabled) {
+    if (isOtpLoginDisabled || isBusy) {
       return;
     }
 
-    const response = await SupplierApi.loginWithOtp({
-      phone: normalizedLoginPhone,
-      otp: otp.trim(),
-    });
+    setSubmitAction('login-otp');
+    try {
+      const response = await SupplierApi.loginWithOtp({
+        phone: formattedLoginPhone,
+        otp: otp.trim(),
+      });
 
-    console.log('handleOtpLogin', response);
-    if (completeLogin(response)) {
-      return;
+      console.log('handleOtpLogin', response);
+      if (completeLogin(response)) {
+        return;
+      }
+
+      Alert.alert(
+        'OTP verification failed',
+        getResponseMessage(response, 'Invalid OTP. Please try again.'),
+      );
+    } catch (error) {
+      Alert.alert(
+        'OTP verification failed',
+        getThrownMessage(error, 'Unable to verify OTP right now. Please try again.'),
+      );
+    } finally {
+      setSubmitAction(null);
     }
-
-    Alert.alert(
-      'OTP verification failed',
-      getResponseMessage(response, 'Invalid OTP. Please try again.'),
-    );
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLoginMethodChange = (nextMethod: SupplierLoginMethod) => {
     setLoginMethod(nextMethod);
     setPassword('');
@@ -663,98 +951,152 @@ export function AuthScreen({
 
   const handleRegisterSupplier = async () => {
     setDidAttemptRegister(true);
-    if (isRegisterDisabled) {
+    if (isRegisterDisabled || isBusy) {
       return;
     }
 
-    const response = await SupplierApi.registerSupplier({
-      name: supplierName.trim(),
-      phone: normalizedSupplierPhone,
-      email: supplierEmail.trim().toLowerCase(),
-      password: supplierPassword,
-      gstin: normalizedGstin,
-      cin: normalizedCin || undefined,
-      address_line_1: supplierAddressLine1.trim(),
-      address_line_2: supplierAddressLine2.trim() || undefined,
-      city: supplierCity.trim(),
-      postal_code: supplierPostalCode.trim(),
-      state: supplierState.trim(),
-      country: supplierCountry.name,
-      lat: supplierLat.trim() || undefined,
-      lng: supplierLng.trim() || undefined,
-      status: supplierStatus.trim() || 'pending',
-      online: false,
-      ratings: supplierRatings.trim() || '0',
-      verified: false,
-    });
+    setSubmitAction('supplier-register');
+    try {
+      const response = await SupplierApi.registerSupplier({
+        name: supplierName.trim(),
+        phone: normalizedSupplierPhone,
+        email: supplierEmail.trim().toLowerCase(),
+        password: supplierPassword.trim(),
+        gstin: normalizedGstin,
+        cin: normalizedCin || undefined,
+        address_line_1: supplierAddressLine1.trim(),
+        address_line_2: supplierAddressLine2.trim() || undefined,
+        city: supplierCity.trim(),
+        postal_code: supplierPostalCode.trim(),
+        state: supplierState.trim(),
+        country: supplierCountry.name,
+        status: 'pending',
+        online: false,
+        ratings: '0',
+        verified: false,
+      });
 
-    console.log('handleRegisterSupplier', response);
-    if (hasResponseError(response)) {
+      console.log('handleRegisterSupplier', response);
+      if (hasResponseError(response)) {
+        Alert.alert(
+          'Registration failed',
+          getResponseMessage(response, 'Unable to submit supplier registration.'),
+        );
+        return;
+      }
+
+      setShowSupplierRegistration(false);
+      resetSupplierForm();
+      Alert.alert(
+        'Application submitted',
+        getResponseMessage(
+          response,
+          'Your application is under review and we will let you know once verified.',
+        ),
+      );
+    } catch (error) {
       Alert.alert(
         'Registration failed',
-        getResponseMessage(response, 'Unable to submit supplier registration.'),
+        getThrownMessage(
+          error,
+          'Unable to submit your application right now. Please try again.',
+        ),
       );
-      return;
+    } finally {
+      setSubmitAction(null);
     }
-
-    setShowSupplierRegistration(false);
-    resetSupplierForm();
-    Alert.alert(
-      'Application submitted',
-      getResponseMessage(
-        response,
-        'Your application is under review and we will let you know once verified.',
-      ),
-    );
   };
 
   const handleForgotPasswordRequestOtp = async () => {
     setDidAttemptForgotPassword(true);
-    if (isForgotPasswordRequestDisabled) {
+    if (isForgotPasswordRequestDisabled || isBusy) {
       return;
     }
 
-    const response = await SupplierApi.requestOtp({
-      phone: normalizedForgotPasswordPhone,
-    });
+    setSubmitAction('forgot-request-otp');
+    try {
+      const response = await SupplierApi.requestOtp({
+        phone: formattedForgotPasswordPhone,
+      });
 
-    console.log('handleForgotPasswordRequestOtp', response);
-    if (hasResponseError(response)) {
+      console.log('handleForgotPasswordRequestOtp', response);
+      if (hasResponseError(response)) {
+        Alert.alert(
+          'OTP request failed',
+          getResponseMessage(response, 'Unable to send OTP. Please try again.'),
+        );
+        return;
+      }
+
+      setShowResetPassword(false);
+      setForgotPasswordOtpRequested(true);
+      setForgotPasswordConfirmPassword('');
+
+      const requestedOtp = extractOtpFromResponse(response);
+      if (requestedOtp) {
+        setForgotPasswordOtp(requestedOtp);
+      }
+
+      Alert.alert(
+        'OTP sent',
+        getResponseMessage(response, 'Enter the OTP sent to your phone to continue.'),
+      );
+    } catch (error) {
       Alert.alert(
         'OTP request failed',
-        getResponseMessage(response, 'Unable to send OTP. Please try again.'),
+        getThrownMessage(error, 'Unable to send OTP right now. Please try again.'),
       );
-      return;
+    } finally {
+      setSubmitAction(null);
     }
-
-    setForgotPasswordOtpRequested(true);
-    Alert.alert(
-      'OTP sent',
-      getResponseMessage(response, 'Enter the OTP sent to your phone to continue.'),
-    );
   };
 
-  const handleForgotPasswordVerify = async () => {
+  const handleForgotPasswordVerify = () => {
     setDidAttemptForgotPassword(true);
     if (isForgotPasswordVerifyDisabled) {
       return;
     }
 
-    const response = await SupplierApi.loginWithOtp({
-      phone: normalizedForgotPasswordPhone,
-      otp: forgotPasswordOtp.trim(),
-    });
+    setShowResetPassword(true);
+  };
 
-    console.log('handleForgotPasswordVerify', response);
-    if (completeLogin(response)) {
-      closeForgotPassword();
+  const handleForgotPasswordReset = async () => {
+    setDidAttemptForgotPassword(true);
+    if (isForgotPasswordResetDisabled || isBusy) {
       return;
     }
 
-    Alert.alert(
-      'OTP verification failed',
-      getResponseMessage(response, 'Invalid OTP. Please try again.'),
-    );
+    setSubmitAction('forgot-reset');
+    try {
+      const response = await SupplierApi.resetPassword({
+        phone: formattedForgotPasswordPhone,
+        otp: forgotPasswordOtp.trim(),
+        password: forgotPasswordPassword.trim(),
+      });
+
+      console.log('handleForgotPasswordReset', response);
+      if (hasResponseError(response)) {
+        Alert.alert(
+          'Password reset failed',
+          getResponseMessage(response, 'Unable to reset password. Please try again.'),
+        );
+        return;
+      }
+
+      Alert.alert(
+        'Password reset successful',
+        getResponseMessage(response, 'Your password has been updated successfully.'),
+      );
+
+      closeForgotPassword();
+    } catch (error) {
+      Alert.alert(
+        'Password reset failed',
+        getThrownMessage(error, 'Unable to reset your password right now. Please try again.'),
+      );
+    } finally {
+      setSubmitAction(null);
+    }
   };
 
   const renderValidationMessage = (visible: boolean, message: string) => {
@@ -769,13 +1111,75 @@ export function AuthScreen({
     );
   };
 
+  const renderInfoButton = (title: string, message: string) => (
+    <Pressable
+      accessibilityRole="button"
+      hitSlop={10}
+      onPress={() => Alert.alert(title, message)}
+      style={[
+        styles.infoButton,
+        {
+          backgroundColor: palette.accentSoft,
+          borderColor: palette.accentSoftBorder,
+        },
+      ]}
+    >
+      <AppText style={[styles.infoButtonText, { color: palette.accentStrong }]}>
+        i
+      </AppText>
+    </Pressable>
+  );
+
+  const renderSectionTitle = (
+    title: string,
+    infoTitle?: string,
+    infoMessage?: string,
+  ) => (
+    <View style={styles.sectionTitleRow}>
+      <AppText style={[styles.formSectionTitle, { color: palette.heading }]}>
+        {title}
+      </AppText>
+      {infoTitle && infoMessage ? renderInfoButton(infoTitle, infoMessage) : null}
+    </View>
+  );
+
+  const renderFieldLabel = (label: string, helper?: string) => (
+    <View style={styles.fieldHeader}>
+      <AppText style={[styles.fieldLabel, { color: palette.heading }]}>{label}</AppText>
+      {helper ? (
+        <AppText style={[styles.fieldHelperInline, { color: palette.subtleText }]}>
+          {helper}
+        </AppText>
+      ) : null}
+    </View>
+  );
+
+  const renderStep = (label: string, active: boolean, complete: boolean = false) => {
+    const stepContainerStyle = {
+      backgroundColor: active ? palette.accentSoft : palette.surface,
+      borderColor: active || complete ? palette.accentSoftBorder : palette.surfaceBorder,
+    };
+    const stepDotStyle = {
+      backgroundColor: complete || active ? palette.accentStrong : 'transparent',
+      borderColor: complete || active ? palette.accentStrong : palette.surfaceBorder,
+    };
+    const stepLabelStyle = {
+      color: active || complete ? palette.accentStrong : palette.subtleText,
+    };
+
+    return (
+      <View key={label} style={[styles.stepChip, stepContainerStyle]}>
+        <View style={[styles.stepDot, stepDotStyle]} />
+        <AppText style={[styles.stepLabel, stepLabelStyle]}>{label}</AppText>
+      </View>
+    );
+  };
+
   return (
     <>
       <SafeAreaView
-        style={[
-          styles.safeArea,
-          { backgroundColor: palette.screenBackground, paddingTop: insets.top },
-        ]}
+        edges={['top']}
+        style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
       >
         <StatusBar barStyle={theme.statusBarStyle} />
         <View pointerEvents="none" style={styles.backgroundDecor}>
@@ -803,9 +1207,24 @@ export function AuthScreen({
               styles.container,
               { backgroundColor: palette.screenBackground },
             ]}
+            keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
             <Animated.View style={[styles.headerSection, loginHeaderAnimatedStyle]}>
+              <View
+                style={[
+                  styles.heroBadge,
+                  {
+                    backgroundColor: palette.accentSoft,
+                    borderColor: palette.accentSoftBorder,
+                  },
+                ]}
+              >
+                <AppText style={[styles.heroBadgeText, { color: palette.accentStrong }]}>
+                  SUPPLIER PORTAL
+                </AppText>
+              </View>
               <Image source={APP_LOGO} style={styles.loginLogo} resizeMode="contain" />
               <AppText i18nKey={titleKey} style={[styles.title, { color: palette.heading }]} />
               <AppText style={[styles.subtitle, { color: palette.subtleText }]}>
@@ -828,54 +1247,140 @@ export function AuthScreen({
                 },
               ]}
             >
-              <AppInput
-                placeholder={t('loginPhonePlaceholder')}
-                value={loginPhone}
-                onChangeText={value => setLoginPhone(value.replace(/\D/g, ''))}
-                onBlur={() => markLoginTouched('phone')}
-                keyboardType="phone-pad"
-                textContentType="telephoneNumber"
-                autoComplete="tel"
-                returnKeyType="next"
-                maxLength={10}
-                style={styles.input}
-                hasError={shouldShowLoginError('phone') && Boolean(loginErrors.phone)}
-              />
-              {renderValidationMessage(
-                shouldShowLoginError('phone'),
-                loginErrors.phone,
-              )}
+              <View
+                style={[
+                  styles.cardBanner,
+                  {
+                    backgroundColor: palette.accentSoft,
+                    borderColor: palette.accentSoftBorder,
+                  },
+                ]}
+              >
+                <View style={styles.cardBannerHeader}>
+                  <AppText style={[styles.cardBannerTitle, { color: palette.heading }]}>
+                    Choose how you want to sign in
+                  </AppText>
+                  {renderInfoButton(
+                    'Sign in options',
+                    'Use password for the fastest access. Use OTP if you need a quick verification-based sign in.',
+                  )}
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.segmentedControl,
+                  {
+                    backgroundColor: palette.accentSoft,
+                    borderColor: palette.accentSoftBorder,
+                  },
+                ]}
+              >
+                {([
+                  ['password', t('passwordLoginTab')],
+                  ['otp', t('otpLoginTab')],
+                ] as const).map(([method, label]) => {
+                  const selected = loginMethod === method;
+                  return (
+                    <Pressable
+                      key={method}
+                      onPress={() => {
+                        if (!isBusy) {
+                          handleLoginMethodChange(method);
+                        }
+                      }}
+                      style={[
+                        styles.segmentedOption,
+                        selected && {
+                          backgroundColor: palette.surface,
+                          borderColor: palette.surfaceBorder,
+                        },
+                      ]}
+                    >
+                      <AppText
+                        style={[
+                          styles.segmentedOptionText,
+                          { color: selected ? palette.heading : palette.subtleText },
+                        ]}
+                      >
+                        {label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={styles.formSectionBlock}>
+                {renderFieldLabel('Supplier mobile number', 'Used for login, OTP, and recovery')}
+                <View style={styles.phoneInputContainer}>
+                  <AppCountryPicker
+                    selectedCountry={loginCountry}
+                    onCountrySelect={setLoginCountry}
+                    disabled={isBusy}
+                  />
+                  <View style={styles.inputWrapper}>
+                    <AppText style={[styles.dialCode, { color: palette.accentStrong }]}>
+                      {loginCountry.dialCode}
+                    </AppText>
+                    <AppInput
+                      placeholder={t('loginPhonePlaceholder')}
+                      value={loginPhone}
+                      onChangeText={value => setLoginPhone(value.replace(/\D/g, ''))}
+                      onBlur={() => markLoginTouched('phone')}
+                      keyboardType="phone-pad"
+                      textContentType="telephoneNumber"
+                      autoComplete="tel"
+                      returnKeyType="next"
+                      maxLength={10}
+                      editable={!isBusy}
+                      style={styles.phoneInput}
+                      hasError={shouldShowLoginError('phone') && Boolean(loginErrors.phone)}
+                    />
+                  </View>
+                </View>
+                {renderValidationMessage(
+                  shouldShowLoginError('phone'),
+                  loginErrors.phone,
+                )}
+              </View>
 
               {loginMethod === 'password' ? (
                 <>
-                  <AppInput
-                    placeholderKey="passwordPlaceholder"
-                    value={password}
-                    onChangeText={setPassword}
-                    onBlur={() => markLoginTouched('password')}
-                    secureTextEntry
-                    textContentType="password"
-                    autoComplete="password"
-                    returnKeyType="done"
-                    style={styles.input}
-                    hasError={
-                      shouldShowLoginError('password') && Boolean(loginErrors.password)
-                    }
-                  />
-                  {renderValidationMessage(
-                    shouldShowLoginError('password'),
-                    loginErrors.password,
-                  )}
+                  <View style={styles.formSectionBlock}>
+                    {renderFieldLabel('Password', 'Use the password created for your supplier account')}
+                    <AppInput
+                      placeholderKey="passwordPlaceholder"
+                      value={password}
+                      onChangeText={setPassword}
+                      onBlur={() => markLoginTouched('password')}
+                      secureTextEntry
+                      textContentType="password"
+                      autoComplete="password"
+                      returnKeyType="done"
+                      editable={!isBusy}
+                      style={styles.input}
+                      hasError={
+                        shouldShowLoginError('password') && Boolean(loginErrors.password)
+                      }
+                    />
+                    {renderValidationMessage(
+                      shouldShowLoginError('password'),
+                      loginErrors.password,
+                    )}
+                  </View>
                   <AppButton
                     title={t('forgotPasswordLink')}
                     onPress={openForgotPassword}
                     variant="ghost"
+                    disabled={isBusy}
                     style={styles.inlineActionButton}
                     textStyle={{ color: palette.accentStrong }}
                   />
                   <AppButton
-                    title={t('loginButton')}
+                    title="Sign in securely"
                     onPress={handlePasswordLogin}
+                    disabled={isPasswordLoginDisabled || isBusy}
+                    loading={submitAction === 'password-login'}
                     style={[
                       styles.primaryButton,
                       {
@@ -891,6 +1396,8 @@ export function AuthScreen({
                   <AppButton
                     title={t(otpRequested ? 'resendOtpButton' : 'requestOtpButton')}
                     onPress={handleRequestOtp}
+                    disabled={isOtpRequestDisabled || isBusy}
+                    loading={submitAction === 'login-request-otp'}
                     style={[
                       styles.secondaryButton,
                       {
@@ -900,67 +1407,111 @@ export function AuthScreen({
                     ]}
                     textStyle={{ color: palette.accentStrong }}
                   />
-                  <AppInput
-                    placeholder={t('otpPlaceholder')}
-                    value={otp}
-                    onChangeText={value => setOtp(value.replace(/\D/g, ''))}
-                    onBlur={() => markLoginTouched('otp')}
-                    keyboardType="number-pad"
-                    returnKeyType="done"
-                    maxLength={6}
-                    style={styles.input}
-                    hasError={shouldShowLoginError('otp') && Boolean(loginErrors.otp)}
-                  />
-                  {renderValidationMessage(
-                    shouldShowLoginError('otp'),
-                    loginErrors.otp,
-                  )}
                   {otpRequested ? (
-                    <AppText style={[styles.helperText, { color: palette.subtleText }]}>
-                      {t('otpSentHelperText')}
-                    </AppText>
+                    <View
+                      style={[
+                        styles.statusPanelCompact,
+                        {
+                          backgroundColor: palette.accentSoft,
+                          borderColor: palette.accentSoftBorder,
+                        },
+                      ]}
+                    >
+                      <AppText style={[styles.statusPanelTitle, { color: palette.heading }]}>
+                        Code sent to {maskedLoginPhone}
+                      </AppText>
+                    </View>
                   ) : null}
-                  <AppButton
-                    title={t('verifyOtpButton')}
-                    onPress={handleOtpLogin}
-                    style={[
-                      styles.primaryButton,
-                      {
-                        backgroundColor: palette.accent,
-                        borderColor: palette.accent,
-                      },
-                    ]}
-                    textStyle={{ color: palette.accentTextOnFill }}
-                  />
+                  {otpRequested ? (
+                    <>
+                      {renderFieldLabel('Verification code', 'Enter the latest 6-digit OTP')}
+                      <OtpPinInput
+                        value={otp}
+                        onChangeText={setOtp}
+                        error={shouldShowLoginError('otp') && Boolean(loginErrors.otp)}
+                        disabled={!otpRequested}
+                      />
+                      {renderValidationMessage(
+                        shouldShowLoginError('otp'),
+                        loginErrors.otp,
+                      )}
+                      <AppText style={[styles.helperText, { color: palette.subtleText }]}>
+                        {t('otpSentHelperText')}
+                      </AppText>
+                      <AppButton
+                        title={t('resendOtpButton')}
+                        variant="ghost"
+                        onPress={handleRequestOtp}
+                        disabled={isBusy}
+                        style={styles.linkButton}
+                        textStyle={{ color: palette.accentStrong }}
+                      />
+                      <AppButton
+                        title="Verify and continue"
+                        onPress={handleOtpLogin}
+                        disabled={isOtpLoginDisabled || isBusy}
+                        loading={submitAction === 'login-otp'}
+                        style={[
+                          styles.primaryButton,
+                          {
+                            backgroundColor: palette.accent,
+                            borderColor: palette.accent,
+                          },
+                        ]}
+                        textStyle={{ color: palette.accentTextOnFill }}
+                      />
+                    </>
+                  ) : null}
                 </>
               )}
 
-              <AppButton
-                title={t('becomeSupplierButton')}
-                onPress={openSupplierRegistration}
+              <View style={[styles.sectionDivider, { backgroundColor: palette.surfaceBorder }]} />
+              <View
                 style={[
-                  styles.ctaButton,
+                  styles.ctaPanel,
                   {
                     backgroundColor: palette.accentSoft,
                     borderColor: palette.accentSoftBorder,
                   },
                 ]}
-                textStyle={{ color: palette.accentStrong }}
-              />
+              >
+                <View style={styles.ctaPanelHeader}>
+                  <AppText style={[styles.ctaPanelTitle, { color: palette.heading }]}>
+                    New supplier onboarding
+                  </AppText>
+                  {renderInfoButton(
+                    'Supplier onboarding',
+                    'Share your business, compliance, and address details once. The account stays under review until verification is complete.',
+                  )}
+                </View>
+                <AppButton
+                  title={t('becomeSupplierButton')}
+                  onPress={openSupplierRegistration}
+                  disabled={isBusy}
+                  style={[
+                    styles.ctaButton,
+                    {
+                      backgroundColor: palette.surface,
+                      borderColor: palette.surfaceBorder,
+                    },
+                  ]}
+                  textStyle={{ color: palette.accentStrong }}
+                />
+              </View>
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      <Modal visible={showSupplierRegistration} animationType="slide" transparent>
+      <Modal
+        visible={showSupplierRegistration}
+        animationType="slide"
+        onRequestClose={closeSupplierRegistration}
+        transparent
+      >
         <SafeAreaView
-          style={[
-            styles.safeArea,
-            {
-              backgroundColor: palette.screenBackground,
-              paddingTop: insets.top,
-            },
-          ]}
+          edges={['top']}
+          style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
         >
           <StatusBar barStyle={theme.statusBarStyle} />
           <ScrollView
@@ -968,13 +1519,32 @@ export function AuthScreen({
               styles.registrationContainer,
               { backgroundColor: palette.screenBackground },
             ]}
+            keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
+            <AppBackButton
+              onPress={closeSupplierRegistration}
+              label={t('backToLogin')}
+            />
             <Animated.View
               style={[styles.registrationHeaderRow, registerHeaderAnimatedStyle]}
             >
               <Image source={APP_LOGO} style={styles.registrationLogo} resizeMode="contain" />
               <View style={styles.registrationHeaderCopy}>
+                <View
+                  style={[
+                    styles.modalBadge,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                >
+                  <AppText style={[styles.modalBadgeText, { color: palette.accentStrong }]}>
+                    APPLICATION
+                  </AppText>
+                </View>
                 <AppText
                   i18nKey="supplierRegistrationTitle"
                   style={[styles.registrationTitle, { color: palette.heading }]}
@@ -987,6 +1557,12 @@ export function AuthScreen({
               </View>
             </Animated.View>
 
+            <View style={styles.stepRow}>
+              {renderStep('Account', true, true)}
+              {renderStep('Business', true, true)}
+              {renderStep('Address', true, true)}
+            </View>
+
             <Animated.View
               style={[
                 styles.card,
@@ -998,283 +1574,302 @@ export function AuthScreen({
                 },
               ]}
             >
-              <AppInput
-                placeholder={t('businessNamePlaceholder')}
-                value={supplierName}
-                onChangeText={setSupplierName}
-                onBlur={() => markRegisterTouched('name')}
-                autoCapitalize="words"
-                keyboardType="default"
-                returnKeyType="next"
-                style={styles.input}
-                hasError={shouldShowRegisterError('name') && Boolean(registerErrors.name)}
-              />
-              {renderValidationMessage(
-                shouldShowRegisterError('name'),
-                registerErrors.name,
-              )}
+              <View style={styles.formSectionBlock}>
+                <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
+                  ACCOUNT ACCESS
+                </AppText>
+                {renderSectionTitle(
+                  'Contact and sign-in details',
+                  'Account access',
+                  'These details help your team sign in and help us verify who owns the supplier account.',
+                )}
 
-              <View style={styles.phoneInputContainer}>
-                <AppCountryPicker
-                  selectedCountry={supplierCountry}
-                  onCountrySelect={setSupplierCountry}
+                {renderFieldLabel('Business name')}
+                <AppInput
+                  placeholder={t('businessNamePlaceholder')}
+                  value={supplierName}
+                  onChangeText={setSupplierName}
+                  onBlur={() => markRegisterTouched('name')}
+                  autoCapitalize="words"
+                  keyboardType="default"
+                  returnKeyType="next"
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={shouldShowRegisterError('name') && Boolean(registerErrors.name)}
                 />
-                <View style={styles.inputWrapper}>
-                  <AppText style={[styles.dialCode, { color: palette.accentStrong }]}>
-                    {supplierCountry.dialCode}
-                  </AppText>
-                  <AppInput
-                    placeholder={t('businessMobilePlaceholder')}
-                    value={supplierPhone}
-                    onChangeText={value => setSupplierPhone(value.replace(/\D/g, ''))}
-                    onBlur={() => markRegisterTouched('phone')}
-                    keyboardType="phone-pad"
-                    textContentType="telephoneNumber"
-                    autoComplete="tel"
-                    returnKeyType="next"
-                    maxLength={10}
-                    style={styles.phoneInput}
-                    hasError={
-                      shouldShowRegisterError('phone') && Boolean(registerErrors.phone)
-                    }
+                {renderValidationMessage(
+                  shouldShowRegisterError('name'),
+                  registerErrors.name,
+                )}
+
+                {renderFieldLabel('Business mobile number')}
+                <View style={styles.phoneInputContainer}>
+                  <AppCountryPicker
+                    selectedCountry={supplierCountry}
+                    onCountrySelect={setSupplierCountry}
+                    disabled={isBusy}
                   />
+                  <View style={styles.inputWrapper}>
+                    <AppText style={[styles.dialCode, { color: palette.accentStrong }]}>
+                      {supplierCountry.dialCode}
+                    </AppText>
+                    <AppInput
+                      placeholder={t('businessMobilePlaceholder')}
+                      value={supplierPhone}
+                      onChangeText={value => setSupplierPhone(value.replace(/\D/g, ''))}
+                      onBlur={() => markRegisterTouched('phone')}
+                      keyboardType="phone-pad"
+                      textContentType="telephoneNumber"
+                      autoComplete="tel"
+                      returnKeyType="next"
+                      maxLength={10}
+                      editable={!isBusy}
+                      style={styles.phoneInput}
+                      hasError={
+                        shouldShowRegisterError('phone') && Boolean(registerErrors.phone)
+                      }
+                    />
+                  </View>
                 </View>
-              </View>
-              {renderValidationMessage(
-                shouldShowRegisterError('phone'),
-                registerErrors.phone,
-              )}
+                {renderValidationMessage(
+                  shouldShowRegisterError('phone'),
+                  registerErrors.phone,
+                )}
 
-              <AppInput
-                placeholder={t('businessEmailPlaceholder')}
-                value={supplierEmail}
-                onChangeText={setSupplierEmail}
-                onBlur={() => markRegisterTouched('email')}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                autoComplete="email"
-                autoCapitalize="none"
-                returnKeyType="next"
-                style={styles.input}
-                hasError={shouldShowRegisterError('email') && Boolean(registerErrors.email)}
-              />
-              {renderValidationMessage(
-                shouldShowRegisterError('email'),
-                registerErrors.email,
-              )}
+                {renderFieldLabel('Business email')}
+                <AppInput
+                  placeholder={t('businessEmailPlaceholder')}
+                  value={supplierEmail}
+                  onChangeText={setSupplierEmail}
+                  onBlur={() => markRegisterTouched('email')}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  returnKeyType="next"
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={shouldShowRegisterError('email') && Boolean(registerErrors.email)}
+                />
+                {renderValidationMessage(
+                  shouldShowRegisterError('email'),
+                  registerErrors.email,
+                )}
 
-              <AppInput
-                placeholderKey="passwordPlaceholder"
-                value={supplierPassword}
-                onChangeText={setSupplierPassword}
-                onBlur={() => markRegisterTouched('password')}
-                secureTextEntry
-                textContentType="newPassword"
-                autoComplete="password-new"
-                returnKeyType="next"
-                style={styles.input}
-                hasError={
-                  shouldShowRegisterError('password') && Boolean(registerErrors.password)
-                }
-              />
-              {renderValidationMessage(
-                shouldShowRegisterError('password'),
-                registerErrors.password,
-              )}
+                {renderFieldLabel('Password', 'Minimum 6 characters')}
+                <AppInput
+                  placeholderKey="passwordPlaceholder"
+                  value={supplierPassword}
+                  onChangeText={setSupplierPassword}
+                  onBlur={() => markRegisterTouched('password')}
+                  secureTextEntry
+                  textContentType="newPassword"
+                  autoComplete="password-new"
+                  returnKeyType="next"
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={
+                    shouldShowRegisterError('password') && Boolean(registerErrors.password)
+                  }
+                />
+                {renderValidationMessage(
+                  shouldShowRegisterError('password'),
+                  registerErrors.password,
+                )}
 
-              <AppInput
-                placeholder={t('businessGstPlaceholder')}
-                value={supplierGstin}
-                onChangeText={value => setSupplierGstin(value.toUpperCase())}
-                onBlur={() => markRegisterTouched('gstin')}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="next"
-                maxLength={15}
-                style={styles.input}
-                hasError={shouldShowRegisterError('gstin') && Boolean(registerErrors.gstin)}
-              />
-              {renderValidationMessage(
-                shouldShowRegisterError('gstin'),
-                registerErrors.gstin,
-              )}
-
-              <AppInput
-                placeholder={t('cinPlaceholder')}
-                value={supplierCin}
-                onChangeText={value => setSupplierCin(value.toUpperCase())}
-                onBlur={() => markRegisterTouched('cin')}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="next"
-                maxLength={21}
-                style={styles.input}
-                hasError={shouldShowRegisterError('cin') && Boolean(registerErrors.cin)}
-              />
-              {renderValidationMessage(
-                shouldShowRegisterError('cin'),
-                registerErrors.cin,
-              )}
-
-              <AppInput
-                placeholder={t('addressLine1Placeholder')}
-                value={supplierAddressLine1}
-                onChangeText={setSupplierAddressLine1}
-                onBlur={() => markRegisterTouched('address1')}
-                autoCapitalize="words"
-                returnKeyType="next"
-                style={styles.input}
-                hasError={
-                  shouldShowRegisterError('address1') && Boolean(registerErrors.address1)
-                }
-              />
-              {renderValidationMessage(
-                shouldShowRegisterError('address1'),
-                registerErrors.address1,
-              )}
-
-              <AppInput
-                placeholder={t('addressLine2Placeholder')}
-                value={supplierAddressLine2}
-                onChangeText={setSupplierAddressLine2}
-                onBlur={() => markRegisterTouched('address2')}
-                autoCapitalize="words"
-                returnKeyType="next"
-                style={styles.input}
-                hasError={
-                  shouldShowRegisterError('address2') && Boolean(registerErrors.address2)
-                }
-              />
-              {renderValidationMessage(
-                shouldShowRegisterError('address2'),
-                registerErrors.address2,
-              )}
-
-              <View style={styles.doubleFieldRow}>
-                <View style={styles.doubleFieldCell}>
-                  <AppInput
-                    placeholder={t('cityPlaceholder')}
-                    value={supplierCity}
-                    onChangeText={setSupplierCity}
-                    onBlur={() => markRegisterTouched('city')}
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                    style={styles.compactInput}
-                    hasError={shouldShowRegisterError('city') && Boolean(registerErrors.city)}
-                  />
-                  {renderValidationMessage(
-                    shouldShowRegisterError('city'),
-                    registerErrors.city,
-                  )}
-                </View>
-                <View style={styles.doubleFieldCell}>
-                  <AppInput
-                    placeholder={t('postalCodePlaceholder')}
-                    value={supplierPostalCode}
-                    onChangeText={value => setSupplierPostalCode(value.replace(/\D/g, ''))}
-                    onBlur={() => markRegisterTouched('postalCode')}
-                    keyboardType="number-pad"
-                    returnKeyType="next"
-                    maxLength={6}
-                    style={styles.compactInput}
-                    hasError={
-                      shouldShowRegisterError('postalCode') &&
-                      Boolean(registerErrors.postalCode)
-                    }
-                  />
-                  {renderValidationMessage(
-                    shouldShowRegisterError('postalCode'),
-                    registerErrors.postalCode,
-                  )}
-                </View>
+                {renderFieldLabel('Confirm password')}
+                <AppInput
+                  placeholderKey="confirmPasswordPlaceholder"
+                  value={supplierConfirmPassword}
+                  onChangeText={setSupplierConfirmPassword}
+                  onBlur={() => markRegisterTouched('confirmPassword')}
+                  secureTextEntry
+                  textContentType="newPassword"
+                  autoComplete="password-new"
+                  returnKeyType="next"
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={
+                    shouldShowRegisterError('confirmPassword') &&
+                    Boolean(registerErrors.confirmPassword)
+                  }
+                />
+                {renderValidationMessage(
+                  shouldShowRegisterError('confirmPassword'),
+                  registerErrors.confirmPassword,
+                )}
               </View>
 
-              <AppInput
-                placeholder={t('statePlaceholder')}
-                value={supplierState}
-                onChangeText={setSupplierState}
-                onBlur={() => markRegisterTouched('state')}
-                autoCapitalize="words"
-                returnKeyType="next"
-                style={styles.input}
-                hasError={shouldShowRegisterError('state') && Boolean(registerErrors.state)}
-              />
-              {renderValidationMessage(
-                shouldShowRegisterError('state'),
-                registerErrors.state,
-              )}
+              <View style={[styles.sectionDivider, { backgroundColor: palette.surfaceBorder }]} />
 
-              {/* <View style={styles.doubleFieldRow}>
-                <View style={styles.doubleFieldCell}>
-                  <AppInput
-                    placeholder={t('latitudePlaceholder')}
-                    value={supplierLat}
-                    onChangeText={setSupplierLat}
-                    onBlur={() => markRegisterTouched('lat')}
-                    keyboardType={decimalKeyboardType}
-                    returnKeyType="next"
-                    style={styles.compactInput}
-                  />
-                  {renderValidationMessage(
-                    shouldShowRegisterError('lat'),
-                    registerErrors.lat,
-                  )}
-                </View>
-                <View style={styles.doubleFieldCell}>
-                  <AppInput
-                    placeholder={t('longitudePlaceholder')}
-                    value={supplierLng}
-                    onChangeText={setSupplierLng}
-                    onBlur={() => markRegisterTouched('lng')}
-                    keyboardType={decimalKeyboardType}
-                    returnKeyType="next"
-                    style={styles.compactInput}
-                  />
-                  {renderValidationMessage(
-                    shouldShowRegisterError('lng'),
-                    registerErrors.lng,
-                  )}
-                </View>
-              </View> */}
+              <View style={styles.formSectionBlock}>
+                <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
+                  BUSINESS IDENTITY
+                </AppText>
+                {renderSectionTitle(
+                  'Compliance details',
+                  'Compliance details',
+                  'GSTIN is required for review. CIN is optional when applicable to your business registration.',
+                )}
 
-              {/* <View style={styles.doubleFieldRow}>
-                <View style={styles.doubleFieldCell}>
-                  <AppInput
-                    placeholder={t('supplierStatusPlaceholder')}
-                    value={supplierStatus}
-                    onChangeText={setSupplierStatus}
-                    onBlur={() => markRegisterTouched('status')}
-                    autoCapitalize="none"
-                    returnKeyType="next"
-                    style={styles.compactInput}
-                  />
-                  {renderValidationMessage(
-                    shouldShowRegisterError('status'),
-                    registerErrors.status,
-                  )}
+                {renderFieldLabel('GSTIN')}
+                <AppInput
+                  placeholder={t('businessGstPlaceholder')}
+                  value={supplierGstin}
+                  onChangeText={value => setSupplierGstin(value.toUpperCase())}
+                  onBlur={() => markRegisterTouched('gstin')}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  maxLength={15}
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={shouldShowRegisterError('gstin') && Boolean(registerErrors.gstin)}
+                />
+                {renderValidationMessage(
+                  shouldShowRegisterError('gstin'),
+                  registerErrors.gstin,
+                )}
+
+                {renderFieldLabel('CIN', 'Optional if not applicable')}
+                <AppInput
+                  placeholder={t('cinPlaceholder')}
+                  value={supplierCin}
+                  onChangeText={value => setSupplierCin(value.toUpperCase())}
+                  onBlur={() => markRegisterTouched('cin')}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  maxLength={21}
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={shouldShowRegisterError('cin') && Boolean(registerErrors.cin)}
+                />
+                {renderValidationMessage(
+                  shouldShowRegisterError('cin'),
+                  registerErrors.cin,
+                )}
+              </View>
+
+              <View style={[styles.sectionDivider, { backgroundColor: palette.surfaceBorder }]} />
+
+              <View style={styles.formSectionBlock}>
+                <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
+                  ADDRESS DETAILS
+                </AppText>
+                {renderSectionTitle(
+                  'Business location',
+                  'Business address',
+                  'A complete and accurate address helps speed up supplier approval and operations setup later.',
+                )}
+
+                {renderFieldLabel('Address line 1')}
+                <AppInput
+                  placeholder={t('addressLine1Placeholder')}
+                  value={supplierAddressLine1}
+                  onChangeText={setSupplierAddressLine1}
+                  onBlur={() => markRegisterTouched('address1')}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={
+                    shouldShowRegisterError('address1') && Boolean(registerErrors.address1)
+                  }
+                />
+                {renderValidationMessage(
+                  shouldShowRegisterError('address1'),
+                  registerErrors.address1,
+                )}
+
+                {renderFieldLabel('Address line 2', 'Optional')}
+                <AppInput
+                  placeholder={t('addressLine2Placeholder')}
+                  value={supplierAddressLine2}
+                  onChangeText={setSupplierAddressLine2}
+                  onBlur={() => markRegisterTouched('address2')}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={
+                    shouldShowRegisterError('address2') && Boolean(registerErrors.address2)
+                  }
+                />
+                {renderValidationMessage(
+                  shouldShowRegisterError('address2'),
+                  registerErrors.address2,
+                )}
+
+                <View style={styles.doubleFieldRow}>
+                  <View style={styles.doubleFieldCell}>
+                    {renderFieldLabel('City')}
+                    <AppInput
+                      placeholder={t('cityPlaceholder')}
+                      value={supplierCity}
+                      onChangeText={setSupplierCity}
+                      onBlur={() => markRegisterTouched('city')}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                      editable={!isBusy}
+                      style={styles.compactInput}
+                      hasError={shouldShowRegisterError('city') && Boolean(registerErrors.city)}
+                    />
+                    {renderValidationMessage(
+                      shouldShowRegisterError('city'),
+                      registerErrors.city,
+                    )}
+                  </View>
+                  <View style={styles.doubleFieldCell}>
+                    {renderFieldLabel('Postal code')}
+                    <AppInput
+                      placeholder={t('postalCodePlaceholder')}
+                      value={supplierPostalCode}
+                      onChangeText={value => setSupplierPostalCode(value.replace(/\D/g, ''))}
+                      onBlur={() => markRegisterTouched('postalCode')}
+                      keyboardType="number-pad"
+                      returnKeyType="next"
+                      maxLength={6}
+                      editable={!isBusy}
+                      style={styles.compactInput}
+                      hasError={
+                        shouldShowRegisterError('postalCode') &&
+                        Boolean(registerErrors.postalCode)
+                      }
+                    />
+                    {renderValidationMessage(
+                      shouldShowRegisterError('postalCode'),
+                      registerErrors.postalCode,
+                    )}
+                  </View>
                 </View>
-                <View style={styles.doubleFieldCell}>
-                  <AppInput
-                    placeholder={t('supplierRatingsPlaceholder')}
-                    value={supplierRatings}
-                    onChangeText={setSupplierRatings}
-                    onBlur={() => markRegisterTouched('ratings')}
-                    keyboardType={decimalKeyboardType}
-                    returnKeyType="done"
-                    style={styles.compactInput}
-                  />
-                  {renderValidationMessage(
-                    shouldShowRegisterError('ratings'),
-                    registerErrors.ratings,
-                  )}
-                </View>
-              </View> */}
+
+                {renderFieldLabel('State')}
+                <AppInput
+                  placeholder={t('statePlaceholder')}
+                  value={supplierState}
+                  onChangeText={setSupplierState}
+                  onBlur={() => markRegisterTouched('state')}
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                  editable={!isBusy}
+                  style={styles.input}
+                  hasError={shouldShowRegisterError('state') && Boolean(registerErrors.state)}
+                />
+                {renderValidationMessage(
+                  shouldShowRegisterError('state'),
+                  registerErrors.state,
+                )}
+              </View>
 
               <AppButton
-                title={t('submitApplicationButton')}
+                title="Submit application"
                 onPress={handleRegisterSupplier}
+                disabled={isRegisterDisabled || isBusy}
+                loading={submitAction === 'supplier-register'}
                 style={[
                   styles.primaryButton,
+                  styles.modalPrimaryButton,
                   {
                     backgroundColor: palette.accent,
                     borderColor: palette.accent,
@@ -1282,32 +1877,20 @@ export function AuthScreen({
                 ]}
                 textStyle={{ color: palette.accentTextOnFill }}
               />
-              <AppButton
-                title={t('backToLogin')}
-                onPress={closeSupplierRegistration}
-                style={[
-                  styles.modalSecondaryButton,
-                  {
-                    backgroundColor: palette.accentSoft,
-                    borderColor: palette.accentSoftBorder,
-                  },
-                ]}
-                textStyle={{ color: palette.accentStrong }}
-              />
             </Animated.View>
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
-      <Modal visible={showForgotPassword} animationType="slide" transparent>
+      <Modal
+        visible={showForgotPassword}
+        animationType="slide"
+        onRequestClose={closeForgotPassword}
+        transparent
+      >
         <SafeAreaView
-          style={[
-            styles.safeArea,
-            {
-              backgroundColor: palette.screenBackground,
-              paddingTop: insets.top,
-            },
-          ]}
+          edges={['top']}
+          style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
         >
           <StatusBar barStyle={theme.statusBarStyle} />
           <ScrollView
@@ -1316,24 +1899,48 @@ export function AuthScreen({
               styles.forgotPasswordContainer,
               { backgroundColor: palette.screenBackground },
             ]}
+            keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
+            <AppBackButton
+              onPress={closeForgotPassword}
+              label={t('backToLogin')}
+            />
             <Animated.View
               style={[styles.registrationHeaderRow, forgotHeaderAnimatedStyle]}
             >
               <Image source={APP_LOGO} style={styles.registrationLogo} resizeMode="contain" />
               <View style={styles.registrationHeaderCopy}>
+                <View
+                  style={[
+                    styles.modalBadge,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                >
+                  <AppText style={[styles.modalBadgeText, { color: palette.accentStrong }]}>
+                    RECOVERY
+                  </AppText>
+                </View>
                 <AppText
-                  i18nKey="forgotPasswordTitle"
+                  i18nKey={showResetPassword ? 'resetPasswordTitle' : 'forgotPasswordTitle'}
                   style={[styles.registrationTitle, { color: palette.heading }]}
                 />
                 <AppText
                   style={[styles.registrationSubtitle, { color: palette.subtleText }]}
                 >
-                  {t('forgotPasswordSubtitle')}
+                  {showResetPassword ? t('resetPasswordSubtitle') : t('forgotPasswordSubtitle')}
                 </AppText>
               </View>
             </Animated.View>
+
+            <View style={styles.stepRow}>
+              {renderStep('Verify', !showResetPassword, forgotPasswordOtpRequested)}
+              {renderStep('Reset', showResetPassword)}
+            </View>
 
             <Animated.View
               style={[
@@ -1346,70 +1953,116 @@ export function AuthScreen({
                 },
               ]}
             >
-              <AppText style={[styles.helperCopy, { color: palette.subtleText }]}>
-                {t('forgotPasswordRecoveryNote')}
-              </AppText>
-
-              <AppInput
-                placeholder={t('loginPhonePlaceholder')}
-                value={forgotPasswordPhone}
-                onChangeText={value => setForgotPasswordPhone(value.replace(/\D/g, ''))}
-                onBlur={() => markForgotPasswordTouched('phone')}
-                keyboardType="phone-pad"
-                textContentType="telephoneNumber"
-                autoComplete="tel"
-                returnKeyType="next"
-                maxLength={10}
-                style={styles.input}
-                hasError={
-                  shouldShowForgotPasswordError('phone') &&
-                  Boolean(forgotPasswordErrors.phone)
-                }
-              />
-              {renderValidationMessage(
-                shouldShowForgotPasswordError('phone'),
-                forgotPasswordErrors.phone,
-              )}
-
-              <AppButton
-                title={t(forgotPasswordOtpRequested ? 'resendOtpButton' : 'sendOtpButton')}
-                onPress={handleForgotPasswordRequestOtp}
+              <View
                 style={[
-                  styles.secondaryButton,
+                  styles.statusPanel,
                   {
                     backgroundColor: palette.accentSoft,
                     borderColor: palette.accentSoftBorder,
                   },
                 ]}
-                textStyle={{ color: palette.accentStrong }}
-              />
+              >
+                <AppText style={[styles.statusPanelTitle, { color: palette.heading }]}>
+                  Recover access in two quick steps
+                </AppText>
+                <AppText style={[styles.statusPanelBody, { color: palette.subtleText }]}>
+                  {t('forgotPasswordRecoveryNote')}
+                </AppText>
+              </View>
 
-              {forgotPasswordOtpRequested ? (
+              {!showResetPassword ? (
                 <>
-                  <AppInput
-                    placeholder={t('otpPlaceholder')}
+                  {renderFieldLabel('Registered mobile number', 'We will send a one-time code here')}
+                  <View style={styles.phoneInputContainer}>
+                    <AppCountryPicker
+                      selectedCountry={forgotPasswordCountry}
+                      onCountrySelect={setForgotPasswordCountry}
+                      disabled={isBusy}
+                    />
+                    <View style={styles.inputWrapper}>
+                      <AppText style={[styles.dialCode, { color: palette.accentStrong }]}>
+                        {forgotPasswordCountry.dialCode}
+                      </AppText>
+                      <AppInput
+                        placeholder={t('loginPhonePlaceholder')}
+                        value={forgotPasswordPhone}
+                        onChangeText={value => setForgotPasswordPhone(value.replace(/\D/g, ''))}
+                        onBlur={() => markForgotPasswordTouched('phone')}
+                        keyboardType="phone-pad"
+                        textContentType="telephoneNumber"
+                        autoComplete="tel"
+                        returnKeyType="next"
+                        maxLength={10}
+                        editable={!isBusy}
+                        style={styles.phoneInput}
+                        hasError={
+                          shouldShowForgotPasswordError('phone') &&
+                          Boolean(forgotPasswordErrors.phone)
+                        }
+                      />
+                    </View>
+                  </View>
+                  {renderValidationMessage(
+                    shouldShowForgotPasswordError('phone'),
+                    forgotPasswordErrors.phone,
+                  )}
+
+                  <AppButton
+                    title={forgotPasswordOtpRequested ? 'Resend code' : 'Send recovery code'}
+                    onPress={handleForgotPasswordRequestOtp}
+                    disabled={isForgotPasswordRequestDisabled || isBusy}
+                    loading={submitAction === 'forgot-request-otp'}
+                    style={[
+                      styles.secondaryButton,
+                      {
+                        backgroundColor: palette.accentSoft,
+                        borderColor: palette.accentSoftBorder,
+                      },
+                    ]}
+                    textStyle={{ color: palette.accentStrong }}
+                  />
+                </>
+              ) : null}
+
+              {forgotPasswordOtpRequested && !showResetPassword ? (
+                <>
+                  <View
+                    style={[
+                      styles.statusPanel,
+                      {
+                        backgroundColor: palette.surface,
+                        borderColor: palette.surfaceBorder,
+                      },
+                    ]}
+                  >
+                    <AppText style={[styles.statusPanelTitle, { color: palette.heading }]}>
+                      Verification code sent to {maskedForgotPasswordPhone}
+                    </AppText>
+                    <AppText style={[styles.statusPanelBody, { color: palette.subtleText }]}>
+                      Enter the latest OTP below to continue with your password reset.
+                    </AppText>
+                  </View>
+                  {renderFieldLabel('Verification code')}
+                  <OtpPinInput
                     value={forgotPasswordOtp}
-                    onChangeText={value => setForgotPasswordOtp(value.replace(/\D/g, ''))}
-                    onBlur={() => markForgotPasswordTouched('otp')}
-                    keyboardType="number-pad"
-                    returnKeyType="done"
-                    maxLength={6}
-                    style={styles.input}
-                    hasError={
+                    onChangeText={setForgotPasswordOtp}
+                    error={
                       shouldShowForgotPasswordError('otp') &&
                       Boolean(forgotPasswordErrors.otp)
                     }
+                    disabled={!forgotPasswordOtpRequested}
                   />
                   {renderValidationMessage(
                     shouldShowForgotPasswordError('otp'),
                     forgotPasswordErrors.otp,
                   )}
-                  <AppText style={[styles.helperText, { color: palette.subtleText }]}>
+                  <AppText style={[styles.helperText, { color: palette.subtleText }]}> 
                     {t('forgotPasswordOtpHelper')}
                   </AppText>
                   <AppButton
-                    title={t('verifyOtpButton')}
+                    title="Continue to reset"
                     onPress={handleForgotPasswordVerify}
+                    disabled={isForgotPasswordVerifyDisabled || isBusy}
                     style={[
                       styles.primaryButton,
                       {
@@ -1422,18 +2075,70 @@ export function AuthScreen({
                 </>
               ) : null}
 
-              <AppButton
-                title={t('backToLogin')}
-                onPress={closeForgotPassword}
-                style={[
-                  styles.modalSecondaryButton,
-                  {
-                    backgroundColor: palette.accentSoft,
-                    borderColor: palette.accentSoftBorder,
-                  },
-                ]}
-                textStyle={{ color: palette.accentStrong }}
-              />
+              {showResetPassword ? (
+                <>
+                  <AppText style={[styles.helperCopy, { color: palette.subtleText }]}> 
+                    Create a fresh password for your supplier account and confirm it once before submitting.
+                  </AppText>
+                  {renderFieldLabel('New password', 'Use at least 6 characters')}
+                  <AppInput
+                    placeholder={t('passwordPlaceholder')}
+                    value={forgotPasswordPassword}
+                    onChangeText={setForgotPasswordPassword}
+                    onBlur={() => markForgotPasswordTouched('password')}
+                    secureTextEntry
+                    textContentType="newPassword"
+                    autoComplete="password-new"
+                    returnKeyType="next"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={
+                      shouldShowForgotPasswordError('password') &&
+                      Boolean(forgotPasswordErrors.password)
+                    }
+                  />
+                  {renderValidationMessage(
+                    shouldShowForgotPasswordError('password'),
+                    forgotPasswordErrors.password,
+                  )}
+                  {renderFieldLabel('Confirm password')}
+                  <AppInput
+                    placeholderKey="confirmPasswordPlaceholder"
+                    value={forgotPasswordConfirmPassword}
+                    onChangeText={setForgotPasswordConfirmPassword}
+                    onBlur={() => markForgotPasswordTouched('confirmPassword')}
+                    secureTextEntry
+                    textContentType="newPassword"
+                    autoComplete="password-new"
+                    returnKeyType="done"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={
+                      shouldShowForgotPasswordError('confirmPassword') &&
+                      Boolean(forgotPasswordErrors.confirmPassword)
+                    }
+                  />
+                  {renderValidationMessage(
+                    shouldShowForgotPasswordError('confirmPassword'),
+                    forgotPasswordErrors.confirmPassword,
+                  )}
+                  <AppButton
+                    title="Update password"
+                    onPress={handleForgotPasswordReset}
+                    disabled={isForgotPasswordResetDisabled || isBusy}
+                    loading={submitAction === 'forgot-reset'}
+                    style={[
+                      styles.primaryButton,
+                      {
+                        backgroundColor: palette.accent,
+                        borderColor: palette.accent,
+                      },
+                    ]}
+                    textStyle={{ color: palette.accentTextOnFill }}
+                  />
+                </>
+              ) : null}
+
             </Animated.View>
           </ScrollView>
         </SafeAreaView>
@@ -1457,7 +2162,8 @@ const styles = StyleSheet.create({
   },
   registrationContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingTop: 18,
+    paddingBottom: 24,
     flexGrow: 1,
   },
   backgroundDecor: {
@@ -1486,7 +2192,19 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 22,
+  },
+  heroBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginBottom: 16,
+  },
+  heroBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.2,
   },
   loginLogo: {
     width: 88,
@@ -1505,6 +2223,19 @@ const styles = StyleSheet.create({
   },
   registrationHeaderCopy: {
     flex: 1,
+  },
+  modalBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 10,
+  },
+  modalBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
   },
   title: {
     fontSize: 34,
@@ -1539,6 +2270,76 @@ const styles = StyleSheet.create({
     },
     elevation: 8,
   },
+  cardBanner: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 14,
+    marginBottom: 14,
+  },
+  cardBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  cardBannerTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 4,
+    marginBottom: 18,
+  },
+  segmentedOption: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: 16,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  segmentedOptionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  formSectionBlock: {
+    marginBottom: 10,
+  },
+  formSectionEyebrow: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    marginBottom: 6,
+  },
+  formSectionTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  fieldHeader: {
+    marginBottom: 8,
+    gap: 2,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  fieldHelperInline: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
   input: {
     marginBottom: 10,
   },
@@ -1571,6 +2372,41 @@ const styles = StyleSheet.create({
   doubleFieldCell: {
     flex: 1,
   },
+  otpPinContainer: {
+    marginBottom: 8,
+  },
+  otpHiddenInput: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+  },
+  otpPinRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  otpPinCell: {
+    flex: 1,
+    minHeight: 58,
+    borderWidth: 1,
+    borderColor: '#B8D7D4',
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  otpPinCellFocused: {
+    borderColor: '#0F766E',
+  },
+  otpPinCellError: {
+    borderColor: '#DC2626',
+  },
+  otpPinText: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
   validationText: {
     fontSize: 12,
     lineHeight: 17,
@@ -1580,13 +2416,15 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 52,
     borderRadius: 18,
-    marginTop: 6,
+    marginTop: 8,
+  },
+  modalPrimaryButton: {
+    marginTop: 18,
   },
   ctaButton: {
     minHeight: 52,
     borderRadius: 18,
     borderWidth: 1,
-    marginTop: 12,
   },
   secondaryButton: {
     minHeight: 52,
@@ -1611,6 +2449,28 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 14,
   },
+  statusPanelCompact: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  statusPanel: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+  },
+  statusPanelTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  statusPanelBody: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
   inlineActionButton: {
     minHeight: 0,
     alignSelf: 'flex-end',
@@ -1620,7 +2480,73 @@ const styles = StyleSheet.create({
     marginTop: -2,
     marginBottom: 10,
   },
-  forgotPasswordContainer: {
+  linkButton: {
+    borderWidth: 0,
+    minHeight: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  stepChip: {
+    flex: 1,
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+  },
+  stepDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  stepLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sectionDivider: {
+    height: 1,
+    marginVertical: 18,
+  },
+  ctaPanel: {
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 16,
+    gap: 14,
+  },
+  ctaPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  ctaPanelTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  infoButton: {
+    width: 24,
+    height: 24,
+    borderWidth: 1,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  forgotPasswordContainer: {
+    paddingTop: 18,
   },
 });

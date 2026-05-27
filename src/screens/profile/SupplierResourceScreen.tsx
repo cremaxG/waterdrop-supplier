@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
+  AppBackButton,
   AppButton,
   AppIcon,
   AppImage,
@@ -779,22 +780,10 @@ export function SupplierResourceScreen({
 
   return (
     <AppRefreshScrollView onRefresh={loadResource}>
-      <Pressable hitSlop={12} onPress={onBack} style={styles.backRow}>
-        <View
-          style={[
-            styles.backIconWrap,
-            {
-              backgroundColor: palette.accentSoft,
-              borderColor: palette.accentSoftBorder,
-            },
-          ]}
-        >
-          <AppIcon name="back" size={18} color={palette.accentStrong} />
-        </View>
-        <AppText style={[styles.backText, { color: palette.accentStrong }]}>
-          {t('supplierResourcesBackButton')}
-        </AppText>
-      </Pressable>
+      <AppBackButton
+        onPress={onBack}
+        label={t('supplierResourcesBackButton')}
+      />
 
       <View
         style={[
@@ -964,25 +953,6 @@ export function SupplierResourceScreen({
 }
 
 const styles = StyleSheet.create({
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginBottom: 18,
-    gap: 8,
-  },
-  backIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
   heroCard: {
     borderWidth: 1,
     borderRadius: 28,

@@ -59,11 +59,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     passwordPlaceholder: 'Enter password',
     confirmPasswordPlaceholder: 'Confirm password',
     forgotPasswordLink: 'Forgot Password?',
-    forgotPasswordTitle: 'Reset Password',
+    forgotPasswordTitle: 'Forgot Password',
     forgotPasswordSubtitle: 'Enter your mobile number to reset password',
     forgotPasswordRecoveryNote:
       'Use OTP verification to sign in if you do not remember your password.',
     forgotPasswordOtpHelper: 'OTP sent to your phone. Verify it to continue.',
+    resetPasswordTitle: 'Reset Password',
+    resetPasswordSubtitle: 'Enter a new password to secure your account',
+    resetPasswordButton: 'Reset Password',
     sendOtpButton: 'Send OTP',
     backToLogin: 'Back to Login',
     termsAndConditions: 'By continuing, you agree to our Terms of Service and Privacy Policy',
@@ -236,6 +239,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     vehicleAddSectionLocationSubtitle:
       'Latitude and longitude used for dispatch and tracking.',
     vehicleAddLocationPickerLabel: 'Selected coordinates',
+    vehicleAddLocationOptionalLabel: 'Optional',
     vehicleAddLocationPickerButton: 'Choose on map',
     vehicleAddLocationPickerTitle: 'Pick vehicle location',
     vehicleAddLocationPickerSubtitle:
@@ -243,6 +247,25 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     vehicleAddLocationPickerHint:
       'Tap anywhere on the map to place the vehicle marker.',
     vehicleAddLocationPickerConfirm: 'Use this location',
+    vehicleAddLocationSearchLabel: 'Search address',
+    vehicleAddLocationSearchPlaceholder: 'Search by area, road, landmark, or full address',
+    vehicleAddLocationSearchingLabel: 'Searching locations...',
+    vehicleAddLocationResolvingLabel: 'Updating address from map pin...',
+    vehicleAddLocationSearchEmpty: 'No matching address found. Try a broader search.',
+    vehicleAddLocationSearchError:
+      'Unable to search addresses right now. Please try again.',
+    vehicleAddLocationAddressError:
+      'Unable to fetch the full address for this location.',
+    vehicleAddLocationAddressBarLabel: 'Selected address',
+    vehicleAddUseSupplierLocationButton: 'Use supplier location',
+    vehicleAddClearLocationButton: 'Clear location',
+    vehicleAddLocationEmptyState: 'No location selected yet',
+    vehicleAddLocationEmptyHint:
+      'You can skip this now or pin the delivery area on the map.',
+    vehicleAddSupplierLocationHint:
+      'Use the supplier profile location as a quick shortcut if the vehicle usually starts there.',
+    vehicleAddLocationSelectedHint:
+      'These coordinates will be sent with the vehicle review request.',
     vehicleAddNumberPlaceholder: 'Vehicle registration number',
     vehicleAddNamePlaceholder: 'Vehicle name',
     vehicleAddPhonePlaceholder: 'Contact phone number',
@@ -594,11 +617,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     passwordPlaceholder: 'पासवर्ड दर्ज करें',
     confirmPasswordPlaceholder: 'पासवर्ड की पुष्टि करें',
     forgotPasswordLink: 'पासवर्ड भूल गए?',
-    forgotPasswordTitle: 'पासवर्ड रीसेट करें',
+    forgotPasswordTitle: 'पासवर्ड भूल गए',
     forgotPasswordSubtitle: 'पासवर्ड रीसेट करने के लिए अपना मोबाइल नंबर दर्ज करें',
     forgotPasswordRecoveryNote:
       'यदि आपको पासवर्ड याद नहीं है, तो OTP सत्यापन का उपयोग करके साइन इन करें।',
     forgotPasswordOtpHelper: 'OTP आपके फोन पर भेज दिया गया है। जारी रखने के लिए उसे सत्यापित करें।',
+    resetPasswordTitle: 'पासवर्ड रीसेट करें',
+    resetPasswordSubtitle: 'अपना खाता सुरक्षित करने के लिए नया पासवर्ड दर्ज करें',
     sendOtpButton: 'OTP भेजें',
     backToLogin: 'लॉगिन पर वापस जाएं',
     termsAndConditions: 'जारी रखकर, आप हमारी सेवा की शर्तों और गोपनीयता नीति से सहमत हैं',
@@ -772,6 +797,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     vehicleAddSectionLocationSubtitle:
       'डिस्पैच और ट्रैकिंग के लिए अक्षांश और देशांतर।',
     vehicleAddLocationPickerLabel: 'चुने गए निर्देशांक',
+    vehicleAddLocationOptionalLabel: 'वैकल्पिक',
     vehicleAddLocationPickerButton: 'मैप पर चुनें',
     vehicleAddLocationPickerTitle: 'वाहन का स्थान चुनें',
     vehicleAddLocationPickerSubtitle:
@@ -779,6 +805,27 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     vehicleAddLocationPickerHint:
       'वाहन मार्कर रखने के लिए मैप पर कहीं भी टैप करें।',
     vehicleAddLocationPickerConfirm: 'यह स्थान उपयोग करें',
+    vehicleAddLocationSearchLabel: 'पता खोजें',
+    vehicleAddLocationSearchPlaceholder:
+      'क्षेत्र, रोड, लैंडमार्क या पूरा पता खोजें',
+    vehicleAddLocationSearchingLabel: 'स्थान खोजे जा रहे हैं...',
+    vehicleAddLocationResolvingLabel: 'मैप पिन से पता अपडेट किया जा रहा है...',
+    vehicleAddLocationSearchEmpty:
+      'कोई मेल खाता पता नहीं मिला। थोड़ा व्यापक खोजें।',
+    vehicleAddLocationSearchError:
+      'अभी पते खोजे नहीं जा सके। कृपया फिर से प्रयास करें।',
+    vehicleAddLocationAddressError:
+      'इस स्थान का पूरा पता प्राप्त नहीं हो सका।',
+    vehicleAddLocationAddressBarLabel: 'चयनित पता',
+    vehicleAddUseSupplierLocationButton: 'सप्लायर स्थान उपयोग करें',
+    vehicleAddClearLocationButton: 'स्थान हटाएं',
+    vehicleAddLocationEmptyState: 'अभी कोई स्थान चयनित नहीं है',
+    vehicleAddLocationEmptyHint:
+      'आप इसे अभी छोड़ सकते हैं या मैप पर डिलीवरी क्षेत्र पिन कर सकते हैं।',
+    vehicleAddSupplierLocationHint:
+      'यदि वाहन आमतौर पर यहीं से शुरू होता है, तो सप्लायर प्रोफ़ाइल स्थान को शॉर्टकट के रूप में उपयोग करें।',
+    vehicleAddLocationSelectedHint:
+      'ये निर्देशांक वाहन रिव्यू अनुरोध के साथ भेजे जाएंगे।',
     vehicleAddNumberPlaceholder: 'वाहन पंजीकरण संख्या',
     vehicleAddNamePlaceholder: 'वाहन नाम',
     vehicleAddPhonePlaceholder: 'संपर्क फोन नंबर',

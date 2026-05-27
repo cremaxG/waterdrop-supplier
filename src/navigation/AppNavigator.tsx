@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Linking } from 'react-native';
 import { AuthScreen } from '../screens/auth/AuthScreen';
+import { OperationsProvider } from '../providers/OperationsProvider';
 import {
   AppLaunchRequest,
   parseLaunchRequest,
@@ -53,12 +54,14 @@ export function AppNavigator() {
   }
 
   return (
-    <MainTabNavigator
-      launchRequest={launchRequest}
-      onLogout={() => {
-        getStorage().remove('authToken');
-        setAuthToken(null);
-      }}
-    />
+    <OperationsProvider>
+      <MainTabNavigator
+        launchRequest={launchRequest}
+        onLogout={() => {
+          getStorage().remove('authToken');
+          setAuthToken(null);
+        }}
+      />
+    </OperationsProvider>
   );
 }

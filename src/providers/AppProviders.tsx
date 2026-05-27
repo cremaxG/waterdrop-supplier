@@ -22,7 +22,6 @@ import {
   setStoredLanguage,
   setStoredThemePreference,
 } from '../storage/preferences';
-import { OperationsProvider } from './OperationsProvider';
 
 interface ThemeContextValue {
   themeName: ThemeName;
@@ -95,7 +94,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ThemeContext.Provider value={themeContextValue}>
       <LanguageContext.Provider value={languageContextValue}>
-        <OperationsProvider>{children}</OperationsProvider>
+        {children}
       </LanguageContext.Provider>
     </ThemeContext.Provider>
   );

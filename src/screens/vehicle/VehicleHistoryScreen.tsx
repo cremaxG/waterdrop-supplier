@@ -5,7 +5,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { AppIcon, AppText } from '../../components';
+import { AppBackButton, AppText } from '../../components';
 import { VehicleHistoryRow, VehicleSectionCard } from '../../components/vehicles';
 import { useAppPalette } from '../../hooks/useAppPalette';
 import { useTranslation } from '../../providers/AppProviders';
@@ -82,12 +82,7 @@ export function VehicleHistoryScreen({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      <Pressable onPress={onBack} style={styles.backRow}>
-        <AppIcon name="back" size={18} color={palette.accentStrong} />
-        <AppText style={[styles.backText, { color: palette.accentStrong }]}>
-          {t('vehicleHistoryBackButton')}
-        </AppText>
-      </Pressable>
+      <AppBackButton onPress={onBack} label={t('vehicleHistoryBackButton')} />
 
       <View
         style={[
@@ -211,18 +206,9 @@ export function VehicleHistoryScreen({
 
 const styles = StyleSheet.create({
   contentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
     paddingBottom: 32,
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-    gap: 8,
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   heroCard: {
     borderWidth: 1,

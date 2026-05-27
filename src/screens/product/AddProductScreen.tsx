@@ -1,14 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import {
+  AppBackButton,
   AppButton,
   AppFieldMessage,
-  AppIcon,
   AppInput,
   AppText,
 } from '../../components';
@@ -137,12 +136,7 @@ export function AddProductScreen({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      <Pressable onPress={onBack} style={styles.backRow}>
-        <AppIcon name="back" size={18} color={palette.accentStrong} />
-        <AppText style={[styles.backText, { color: palette.accentStrong }]}>
-          {t('productAddBackButton')}
-        </AppText>
-      </Pressable>
+      <AppBackButton onPress={onBack} label={t('productAddBackButton')} />
 
       <View
         style={[
@@ -326,18 +320,9 @@ export function AddProductScreen({
 
 const styles = StyleSheet.create({
   contentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
     paddingBottom: 32,
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-    gap: 8,
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   heroCard: {
     borderWidth: 1,

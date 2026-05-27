@@ -10,15 +10,39 @@ import { useAppPalette } from '../hooks/useAppPalette';
 import { useTranslation } from '../providers/AppProviders';
 
 export interface AppInputProps extends TextInputProps {
+  hasError?: boolean;
   placeholderKey?: string;
   style?: StyleProp<TextStyle>;
 }
 
-export function AppInput({ placeholderKey, style, ...rest }: AppInputProps) {
+export function AppInput({
+  hasError = false,
+  placeholderKey,
+  style,
+  ...rest
+}: AppInputProps) {
   const palette = useAppPalette();
   const { t } = useTranslation();
   const [isFocused, setFocused] = useState(false);
   const placeholder = placeholderKey ? t(placeholderKey) : rest.placeholder;
+  const borderColor = hasError
+    ? '#DC2626'
+    : isFocused
+      ? palette.accent
+      : palette.border;
+  const inputDynamicStyle = {
+    borderColor,
+    backgroundColor: palette.surface,
+    color: palette.text,
+    shadowColor: isFocused ? palette.shadow : 'transparent',
+    shadowOpacity: isFocused ? 0.12 : 0,
+    shadowRadius: 12,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    elevation: isFocused ? 3 : 0,
+  } satisfies TextStyle;
 
   return (
     <TextInput
@@ -26,19 +50,7 @@ export function AppInput({ placeholderKey, style, ...rest }: AppInputProps) {
       placeholderTextColor={palette.muted}
       style={[
         styles.input,
-        {
-          borderColor: isFocused ? palette.accent : palette.border,
-          backgroundColor: palette.surface,
-          color: palette.text,
-          shadowColor: isFocused ? palette.shadow : 'transparent',
-          shadowOpacity: isFocused ? 0.12 : 0,
-          shadowRadius: 12,
-          shadowOffset: {
-            width: 0,
-            height: 8,
-          },
-          elevation: isFocused ? 3 : 0,
-        },
+        inputDynamicStyle,
         style,
       ]}
       selectionColor={palette.accent}

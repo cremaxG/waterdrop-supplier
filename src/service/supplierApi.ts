@@ -35,6 +35,12 @@ export interface SupplierOtpLoginPayload {
   otp: string;
 }
 
+export interface SupplierResetPasswordPayload {
+  phone: string;
+  otp: string;
+  password: string;
+}
+
 export interface SupplierProfile {
   id: number;
   name: string;
@@ -60,12 +66,16 @@ export interface SupplierProfile {
 
 export interface CreateVehiclePayload {
   phone: string;
-  email: string;
+  email?: string;
   supplier_id: number;
   vehicle_number: string;
+  load_capacity?: string;
+  driver_licence_no?: string;
   name: string;
   lat?: string;
   lng?: string;
+  status?: 'pending_review' | 'active' | 'approved' | 'blocked' | 'deactive' | 'rejected';
+  online?: boolean;
 }
 
 export interface VehicleResponse {
@@ -74,11 +84,30 @@ export interface VehicleResponse {
   vehicle_number: string;
   name: string;
   phone: string;
-  email: string;
-  lat: string;
-  lng: string;
+  email?: string;
+  load_capacity?: string;
+  driver_licence_no?: string;
+  lat?: string;
+  lng?: string;
+  status?: string;
+  online?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface SupplierVehiclesQuery {
+  filter?: 'all' | 'online' | 'offline' | 'pending_review';
+}
+
+export interface VehicleLocationUpdatePayload {
+  lat: string;
+  lng: string;
+  orderId?: number;
+}
+
+export interface VehicleProductPayload {
+  product_id: number;
+  qty: number;
 }
 
 export interface SupplierResourceQuery {
@@ -162,12 +191,23 @@ export default class SupplierApi {
     return BaseApi.post('/auth/suppliers/login-otp', payload, {}, {}, '');
   }
 
+  static resetPassword(payload: SupplierResetPasswordPayload) {
+    return BaseApi.post('/auth/suppliers/reset-password', payload, {}, {}, '');
+  }
+
   static getSupplierProfile() {
     return BaseApi.get('/suppliers/profile');
   }
 
   static createVehicle(payload: CreateVehiclePayload) {
     return BaseApi.post('/vehicles', payload);
+  }
+
+  static listSupplierVehicles(
+    supplierId: number | string = 'me',
+    params?: SupplierVehiclesQuery,
+  ) {
+    return BaseApi.get(`/vehicles/supplier/${supplierId}`, {}, { params });
   }
 
   static listVehicles(params?: Record<string, any>) {
@@ -180,6 +220,39 @@ export default class SupplierApi {
 
   static updateVehicle(vehicleId: number | string, payload: Partial<CreateVehiclePayload>) {
     return BaseApi.put(`/vehicles/${vehicleId}`, payload);
+  }
+
+  static getVehicleDetails(vehicleId: number | string) {
+    return BaseApi.get(`/vehicles/${vehicleId}/details`);
+  }
+
+  static listVehicleOrders(
+    vehicleId: number | string,
+    params?: { status?: 'all' | 'delivered' | 'cancelled' | 'confirmed' | 'out_for_delivery' },
+  ) {
+    return BaseApi.get(`/vehicles/${vehicleId}/orders`, {}, { params });
+  }
+
+  static getVehicleOrderDetails(vehicleId: number | string, orderId: number | string) {
+    return BaseApi.get(`/vehicles/${vehicleId}/orders/${orderId}`);
+  }
+
+  static setVehicleAvailability(vehicleId: number | string, online: boolean) {
+    return BaseApi.patch(`/vehicles/${vehicleId}/availability`, { online });
+  }
+
+  static updateVehicleLocation(
+    vehicleId: number | string,
+    payload: VehicleLocationUpdatePayload,
+  ) {
+    return BaseApi.patch(`/vehicles/${vehicleId}/location`, payload);
+  }
+
+  static upsertVehicleProduct(
+    vehicleId: number | string,
+    payload: VehicleProductPayload,
+  ) {
+    return BaseApi.post(`/vehicles/${vehicleId}/products`, payload);
   }
 
   static deleteVehicle(vehicleId: number | string) {

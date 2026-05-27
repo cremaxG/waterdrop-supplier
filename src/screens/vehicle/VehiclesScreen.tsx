@@ -81,6 +81,7 @@ export function VehiclesScreen({
     null,
   );
   const [isAddVehicleVisible, setAddVehicleVisible] = useState(false);
+  const [supplierProfile, setSupplierProfile] = useState<SupplierProfile | null>(null);
   const [isCreatingVehicle, setIsCreatingVehicle] = useState(false);
   const [vehicleSubmissionError, setVehicleSubmissionError] = useState<string | null>(
     null,
@@ -178,6 +179,26 @@ export function VehiclesScreen({
     selectedVehicleId,
     width,
   ]);
+
+  useEffect(() => {
+    if (!isAddVehicleVisible || supplierProfile?.id) {
+      return;
+    }
+
+    const loadSupplierProfile = async () => {
+      try {
+        const profileResponse = await SupplierApi.getSupplierProfile();
+        const profile = unwrapSupplierProfile(profileResponse);
+        if (profile?.id) {
+          setSupplierProfile(profile);
+        }
+      } catch (error) {
+        console.warn('Unable to prefill supplier profile for vehicle form', error);
+      }
+    };
+
+    loadSupplierProfile();
+  }, [isAddVehicleVisible, supplierProfile?.id]);
 
   useEffect(() => {
     if (
@@ -338,23 +359,30 @@ export function VehiclesScreen({
     });
   };
 
+  const ensureSupplierProfile = async () => {
+    if (supplierProfile?.id) {
+      return supplierProfile;
+    }
+
+    const profileResponse = await SupplierApi.getSupplierProfile();
+    const profile = unwrapSupplierProfile(profileResponse);
+
+    if (profile?.id) {
+      setSupplierProfile(profile);
+    }
+
+    return profile;
+  };
+
   const handleAddVehicle = async (draft: NewVehicleDraft) => {
     setVehicleSubmissionError(null);
     setIsCreatingVehicle(true);
 
     try {
-      const profileResponse = await SupplierApi.getSupplierProfile();
-      const profile = unwrapSupplierProfile(profileResponse);
+      const profile = await ensureSupplierProfile();
 
       if (!profile?.id) {
         throw new Error('Unable to load supplier profile.');
-      }
-
-      const supplierLat = String(profile.lat ?? '').trim();
-      const supplierLng = String(profile.lng ?? '').trim();
-
-      if (!supplierLat || !supplierLng) {
-        throw new Error('Supplier location is missing. Please update the supplier profile location first.');
       }
 
       const payload = {
@@ -365,8 +393,8 @@ export function VehiclesScreen({
         load_capacity: draft.capacity.trim(),
         driver_licence_no: draft.driverLicenseNumber.trim(),
         name: draft.name.trim(),
-        lat: supplierLat,
-        lng: supplierLng,
+        lat: draft.lat.trim() || undefined,
+        lng: draft.lng.trim() || undefined,
         status: 'pending_review' as const,
         online: false,
       };
@@ -396,7 +424,7 @@ export function VehiclesScreen({
         route: response.vehicle_number ?? draft.vehicleNumber.trim(),
         capacity: response.load_capacity ?? draft.capacity.trim(),
         currentLocation:
-          [response.lat ?? supplierLat, response.lng ?? supplierLng]
+          [response.lat ?? draft.lat.trim(), response.lng ?? draft.lng.trim()]
             .filter(Boolean)
             .join(', ') || 'Location pending',
         driverName: 'Assigned driver',
@@ -453,7 +481,15 @@ export function VehiclesScreen({
     if (!selectedVehicleId) {
       return;
     }
-    toggleVehicleAvailability(selectedVehicleId);
+    toggleVehicleAvailability(selectedVehicleId).catch((error: any) => {
+      const nextMessage =
+        extractApiErrorMessage(error) ??
+        error?.message ??
+        'Unable to update vehicle availability.';
+      setSnackbarMessage(nextMessage);
+      setSnackbarTone('error');
+      setSnackbarVisible(true);
+    });
   };
 
   const getVehicleStatus = (vehicle: VehicleRecord) => {
@@ -773,6 +809,14 @@ export function VehiclesScreen({
             onSubmit={handleAddVehicle}
             isSubmitting={isCreatingVehicle}
             submitErrorMessage={vehicleSubmissionError}
+            supplierLocationSuggestion={
+              supplierProfile?.lat && supplierProfile?.lng
+                ? {
+                    lat: String(supplierProfile.lat),
+                    lng: String(supplierProfile.lng),
+                  }
+                : null
+            }
           />
         </Animated.View>
       ) : null}
