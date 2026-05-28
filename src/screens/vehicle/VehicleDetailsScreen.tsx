@@ -84,17 +84,17 @@ export function VehicleDetailsScreen({
   const statusColor = isPendingReview
     ? '#D97706'
     : vehicle.isOnline
-      ? '#059669'
+      ? '#0284C7'
       : '#DC2626';
   const statusBackground = isPendingReview
     ? '#FEF3C7'
     : vehicle.isOnline
-      ? '#DCFCE7'
+      ? '#E0F2FE'
       : '#FEE2E2';
   const statusBorder = isPendingReview
     ? '#FCD34D'
     : vehicle.isOnline
-      ? '#86EFAC'
+      ? '#7DD3FC'
       : '#FCA5A5';
   const statusLabel = isPendingReview
     ? t('vehiclePendingReviewStatus')

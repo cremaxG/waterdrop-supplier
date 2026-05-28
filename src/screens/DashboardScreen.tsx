@@ -207,9 +207,9 @@ export function DashboardScreen({
           {
             label: t('dashboardOnlineVehiclesLabel'),
             value: String(metrics.onlineVehicles),
-            color: '#059669',
-            background: '#DCFCE7',
-            border: '#86EFAC',
+            color: '#0284C7',
+            background: '#E0F2FE',
+            border: '#7DD3FC',
           },
           {
             label: t('dashboardOfflineVehiclesLabel'),

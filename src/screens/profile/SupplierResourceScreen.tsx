@@ -1077,15 +1077,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   activeBadge: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
+    backgroundColor: '#E0F2FE',
+    borderColor: '#7DD3FC',
   },
   inactiveBadge: {
     backgroundColor: '#FEF3C7',
     borderColor: '#FCD34D',
   },
   activeBadgeText: {
-    color: '#059669',
+    color: '#0284C7',
   },
   inactiveBadgeText: {
     color: '#D97706',

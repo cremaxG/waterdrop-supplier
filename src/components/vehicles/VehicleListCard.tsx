@@ -40,13 +40,13 @@ export function VehicleListCard({
       ? '#FEF3C7'
       : statusTone === 'warning'
         ? '#FEE2E2'
-        : '#DCFCE7';
+        : '#E0F2FE';
   const statusBorder =
     statusTone === 'pending'
       ? '#FCD34D'
       : statusTone === 'warning'
         ? '#FCA5A5'
-        : '#86EFAC';
+        : '#7DD3FC';
 
   return (
     <Pressable

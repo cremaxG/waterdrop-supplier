@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Easing,
   Image,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -12,9 +12,10 @@ import {
   StatusBar,
   StyleSheet,
   TextInput,
+  UIManager,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppBackButton,
   AppButton,
@@ -23,8 +24,8 @@ import {
   AppText,
 } from '../../components';
 import { Country, DEFAULT_COUNTRY } from '../../constants/countries';
-import { useTheme, useTranslation } from '../../providers/AppProviders';
-import SupplierApi from '../../service/supplierApi';
+import { useAppAlert, useTheme, useTranslation } from '../../providers/AppProviders';
+import SupplierApi, { extractOtpFromResponse } from '../../service/supplierApi';
 import { getStorage } from '../../utils/Storage';
 
 const APP_LOGO = require('../../../assets/splash/appIcon.png');
@@ -53,6 +54,8 @@ type SubmitAction =
   | 'forgot-request-otp'
   | 'forgot-reset'
   | null;
+
+const OTP_RESEND_COOLDOWN_SECONDS = 45;
 
 export interface AuthScreenProps {
   onSignIn?: (token: string) => void;
@@ -99,142 +102,6 @@ function hasResponseError(response: any) {
   }
 
   return false;
-}
-
-function sanitizeOtpCandidate(value: unknown) {
-  if (value == null) {
-    return null;
-  }
-
-  const otpString = String(value).replace(/\D/g, '');
-  if (otpString.length < 4 || otpString.length > 8) {
-    return null;
-  }
-
-  return otpString;
-}
-
-function extractOtpFromText(value: unknown) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const patterns = [
-    /\botp(?:\s*(?:is|code|:|=|-))?\s*(\d{4,8})\b/i,
-    /\bverification(?:\s*code)?(?:\s*(?:is|:|=|-))?\s*(\d{4,8})\b/i,
-    /\bcode(?:\s*(?:is|:|=|-))?\s*(\d{4,8})\b/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = value.match(pattern);
-    const otp = sanitizeOtpCandidate(match?.[1]);
-    if (otp) {
-      return otp;
-    }
-  }
-
-  return null;
-}
-
-function extractOtpFromResponse(response: any) {
-  const stringifiedResponse =
-    response && typeof response === 'object'
-      ? JSON.stringify(response)
-      : typeof response === 'string'
-        ? response
-        : '';
-
-  const directCandidates = [
-    response?.otp,
-    response?.data?.otp,
-    response?.data?.data?.otp,
-    response?.verification_code,
-    response?.verificationCode,
-    response?.data?.verification_code,
-    response?.data?.verificationCode,
-    response?.data?.code,
-    response?.code,
-  ];
-
-  for (const candidate of directCandidates) {
-    const otp = sanitizeOtpCandidate(candidate);
-    if (otp) {
-      return otp;
-    }
-  }
-
-  const visited = new WeakSet<object>();
-  const queue: any[] = [response];
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) {
-      continue;
-    }
-
-    const fromText = extractOtpFromText(current);
-    if (fromText) {
-      return fromText;
-    }
-
-    if (typeof current !== 'object') {
-      continue;
-    }
-
-    if (visited.has(current)) {
-      continue;
-    }
-    visited.add(current);
-
-    if (Array.isArray(current)) {
-      queue.push(...current);
-      continue;
-    }
-
-    for (const [key, value] of Object.entries(current)) {
-      const normalizedKey = key.toLowerCase();
-
-      if (
-        normalizedKey.includes('otp') ||
-        normalizedKey.includes('code') ||
-        normalizedKey.includes('message')
-      ) {
-        const directOtp =
-          sanitizeOtpCandidate(value) ?? extractOtpFromText(value);
-        if (directOtp) {
-          return directOtp;
-        }
-      }
-
-      if (value && typeof value === 'object') {
-        queue.push(value);
-      } else if (typeof value === 'string') {
-        queue.push(value);
-      }
-    }
-  }
-
-  const fallbackOtpPatterns = [
-    /"otp"\s*:\s*"?(\d{4,8})"?/i,
-    /"verification[_\s-]?code"\s*:\s*"?(\d{4,8})"?/i,
-    /"code"\s*:\s*"?(\d{4,8})"?/i,
-  ];
-
-  for (const pattern of fallbackOtpPatterns) {
-    const otp = sanitizeOtpCandidate(stringifiedResponse.match(pattern)?.[1]);
-    if (otp) {
-      return otp;
-    }
-  }
-
-  const genericOtp = sanitizeOtpCandidate(
-    stringifiedResponse.match(/\b(\d{4,8})\b/)?.[1],
-  );
-  if (genericOtp) {
-    return genericOtp;
-  }
-
-  return null;
 }
 
 function formatPhoneWithCountry(phone: string, countryDialCode: string) {
@@ -326,20 +193,23 @@ export function AuthScreen({
 }: AuthScreenProps) {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { showAlert } = useAppAlert();
+  const insets = useSafeAreaInsets();
   const isDark = theme.statusBarStyle === 'light-content';
+  const modalTopInset = insets.top + 18;
   const palette = {
-    screenBackground: isDark ? '#08111F' : '#ECFEFF',
+    screenBackground: isDark ? '#071827' : '#F0FBFF',
     surface: isDark ? '#102235' : '#FFFFFF',
-    surfaceBorder: isDark ? 'rgba(94, 234, 212, 0.18)' : '#BEE3F8',
-    heading: isDark ? '#F0FDFA' : '#0F172A',
-    subtleText: isDark ? '#94A3B8' : '#475569',
-    accent: isDark ? '#2DD4BF' : '#0F766E',
-    accentStrong: isDark ? '#14B8A6' : '#115E59',
-    accentSoft: isDark ? 'rgba(45, 212, 191, 0.14)' : '#CCFBF1',
-    accentSoftBorder: isDark ? 'rgba(94, 234, 212, 0.3)' : '#99F6E4',
+    surfaceBorder: isDark ? 'rgba(56, 189, 248, 0.2)' : '#C7E6F8',
+    heading: isDark ? '#F3FBFF' : '#0B1F33',
+    subtleText: isDark ? '#9CB8CC' : '#5E7B8E',
+    accent: isDark ? '#38BDF8' : '#0EA5E9',
+    accentStrong: isDark ? '#67E8F9' : '#0369A1',
+    accentSoft: isDark ? 'rgba(56, 189, 248, 0.16)' : '#DFF6FF',
+    accentSoftBorder: isDark ? 'rgba(103, 232, 249, 0.28)' : '#B7E6FA',
     accentTextOnFill: '#F8FAFC',
-    decorTop: isDark ? 'rgba(45, 212, 191, 0.16)' : 'rgba(34, 197, 94, 0.12)',
-    decorBottom: isDark ? 'rgba(56, 189, 248, 0.14)' : 'rgba(14, 165, 233, 0.12)',
+    decorTop: isDark ? 'rgba(34, 211, 238, 0.18)' : 'rgba(14, 165, 233, 0.18)',
+    decorBottom: isDark ? 'rgba(59, 130, 246, 0.18)' : 'rgba(2, 132, 199, 0.14)',
     shadow: isDark ? '#020617' : '#0F172A',
     error: isDark ? '#FCA5A5' : '#DC2626',
   };
@@ -350,6 +220,13 @@ export function AuthScreen({
   const registerCardProgress = useRef(new Animated.Value(0)).current;
   const forgotHeaderProgress = useRef(new Animated.Value(0)).current;
   const forgotCardProgress = useRef(new Animated.Value(0)).current;
+  const loginModeContentProgress = useRef(new Animated.Value(1)).current;
+  const lastLoginOtpRef = useRef<Record<string, string>>({});
+  const lastForgotPasswordOtpRef = useRef<Record<string, string>>({});
+  const pendingAutoLoginOtpRef = useRef<{ phone: string; otp: string } | null>(null);
+  const pendingAutoForgotOtpRef = useRef<{ phone: string; otp: string } | null>(null);
+  const handleOtpLoginRef = useRef<() => void>(() => {});
+  const handleForgotPasswordVerifyRef = useRef<() => void>(() => {});
 
   const [loginMethod, setLoginMethod] = useState<SupplierLoginMethod>('password');
   const [loginCountry, setLoginCountry] = useState<Country>(DEFAULT_COUNTRY);
@@ -358,6 +235,7 @@ export function AuthScreen({
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [otpRequested, setOtpRequested] = useState(false);
+  const [loginOtpCooldownSeconds, setLoginOtpCooldownSeconds] = useState(0);
   const [showSupplierRegistration, setShowSupplierRegistration] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
@@ -366,6 +244,7 @@ export function AuthScreen({
   const [forgotPasswordPassword, setForgotPasswordPassword] = useState('');
   const [forgotPasswordConfirmPassword, setForgotPasswordConfirmPassword] = useState('');
   const [forgotPasswordOtpRequested, setForgotPasswordOtpRequested] = useState(false);
+  const [forgotOtpCooldownSeconds, setForgotOtpCooldownSeconds] = useState(0);
   const [supplierCountry, setSupplierCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
@@ -398,8 +277,17 @@ export function AuthScreen({
   const formattedForgotPasswordPhone = formatPhoneWithCountry(normalizedForgotPasswordPhone, forgotPasswordCountry.dialCode);
   const maskedLoginPhone = maskPhoneNumber(formattedLoginPhone);
   const maskedForgotPasswordPhone = maskPhoneNumber(formattedForgotPasswordPhone);
+  const surfacedLoginOtp = otp || lastLoginOtpRef.current[formattedLoginPhone] || '';
+  const surfacedForgotPasswordOtp =
+    forgotPasswordOtp || lastForgotPasswordOtpRef.current[formattedForgotPasswordPhone] || '';
   const normalizedGstin = supplierGstin.trim().toUpperCase();
   const normalizedCin = supplierCin.trim().toUpperCase();
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    }
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -472,6 +360,108 @@ export function AuthScreen({
       ]),
     ]).start();
   }, [forgotCardProgress, forgotHeaderProgress, showForgotPassword]);
+
+  useEffect(() => {
+    const cachedOtp = lastLoginOtpRef.current[formattedLoginPhone];
+    if (otpRequested && !otp && cachedOtp) {
+      setOtp(cachedOtp);
+    }
+  }, [formattedLoginPhone, otp, otpRequested]);
+
+  useEffect(() => {
+    const cachedOtp = lastForgotPasswordOtpRef.current[formattedForgotPasswordPhone];
+    if (
+      forgotPasswordOtpRequested &&
+      !forgotPasswordOtp &&
+      cachedOtp
+    ) {
+      setForgotPasswordOtp(cachedOtp);
+    }
+  }, [
+    forgotPasswordOtp,
+    forgotPasswordOtpRequested,
+    formattedForgotPasswordPhone,
+  ]);
+
+  useEffect(() => {
+    if (loginOtpCooldownSeconds <= 0) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setLoginOtpCooldownSeconds(current => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [loginOtpCooldownSeconds]);
+
+  useEffect(() => {
+    if (forgotOtpCooldownSeconds <= 0) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setForgotOtpCooldownSeconds(current => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [forgotOtpCooldownSeconds]);
+
+  useEffect(() => {
+    const pendingOtp = pendingAutoLoginOtpRef.current;
+    if (!pendingOtp) {
+      return;
+    }
+
+    if (
+      loginMethod !== 'otp' ||
+      !otpRequested ||
+      isBusy ||
+      formattedLoginPhone !== pendingOtp.phone ||
+      otp !== pendingOtp.otp ||
+      pendingOtp.otp.length < 6
+    ) {
+      return;
+    }
+
+    pendingAutoLoginOtpRef.current = null;
+    requestAnimationFrame(() => {
+      handleOtpLoginRef.current();
+    });
+  }, [formattedLoginPhone, isBusy, loginMethod, otp, otpRequested]);
+
+  useEffect(() => {
+    const pendingOtp = pendingAutoForgotOtpRef.current;
+    if (!pendingOtp) {
+      return;
+    }
+
+    if (
+      !forgotPasswordOtpRequested ||
+      showResetPassword ||
+      isBusy ||
+      formattedForgotPasswordPhone !== pendingOtp.phone ||
+      forgotPasswordOtp !== pendingOtp.otp ||
+      pendingOtp.otp.length < 6
+    ) {
+      return;
+    }
+
+    pendingAutoForgotOtpRef.current = null;
+    requestAnimationFrame(() => {
+      handleForgotPasswordVerifyRef.current();
+    });
+  }, [
+    forgotPasswordOtp,
+    forgotPasswordOtpRequested,
+    formattedForgotPasswordPhone,
+    isBusy,
+    showResetPassword,
+  ]);
 
   const loginErrors = useMemo(
     () => ({
@@ -646,6 +636,12 @@ export function AuthScreen({
     Boolean(forgotPasswordErrors.confirmPassword);
   const isRegisterDisabled = Object.values(registerErrors).some(Boolean);
   const isBusy = submitAction !== null;
+  const isLoginOtpResendCoolingDown = otpRequested && loginOtpCooldownSeconds > 0;
+  const isForgotOtpResendCoolingDown =
+    forgotPasswordOtpRequested && forgotOtpCooldownSeconds > 0;
+
+  const formatOtpCooldownLabel = (baseLabel: string, seconds: number) =>
+    `${baseLabel} (${seconds}s)`;
 
   const loginHeaderAnimatedStyle = {
     opacity: loginHeaderProgress,
@@ -678,6 +674,18 @@ export function AuthScreen({
         scale: loginCardProgress.interpolate({
           inputRange: [0, 1],
           outputRange: [0.96, 1],
+        }),
+      },
+    ],
+  };
+
+  const loginModeContentAnimatedStyle = {
+    opacity: loginModeContentProgress,
+    transform: [
+      {
+        translateY: loginModeContentProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [12, 0],
         }),
       },
     ],
@@ -792,9 +800,11 @@ export function AuthScreen({
     setForgotPasswordPassword('');
     setForgotPasswordConfirmPassword('');
     setForgotPasswordOtpRequested(false);
+    setForgotOtpCooldownSeconds(0);
     setShowResetPassword(false);
     setForgotPasswordTouched({});
     setDidAttemptForgotPassword(false);
+    pendingAutoForgotOtpRef.current = null;
   };
 
   const openForgotPassword = () => {
@@ -819,7 +829,7 @@ export function AuthScreen({
     const isVerified = supplier?.verified ?? response?.verified ?? response?.data?.verified;
 
     if (token && isVerified === false) {
-      Alert.alert(
+      showAlert(
         'Application under review',
         'Your supplier application is under review. We will let you know once verified.',
       );
@@ -833,6 +843,54 @@ export function AuthScreen({
     getStorage().set('authToken', token);
     onSignIn?.(token);
     return true;
+  };
+
+  const autofillOtpFromResponse = (
+    response: unknown,
+    target: 'login' | 'forgot',
+    phone: string,
+  ) => {
+    const extractedOtp = extractOtpFromResponse(response);
+    if (extractedOtp) {
+      if (target === 'login') {
+        lastLoginOtpRef.current[phone] = extractedOtp;
+        pendingAutoLoginOtpRef.current = { phone, otp: extractedOtp };
+        setOtp(extractedOtp);
+      }
+
+      if (target === 'forgot') {
+        lastForgotPasswordOtpRef.current[phone] = extractedOtp;
+        pendingAutoForgotOtpRef.current = { phone, otp: extractedOtp };
+        setForgotPasswordOtp(extractedOtp);
+      }
+    }
+
+    return extractedOtp;
+  };
+
+  const handleLoginPhoneChange = (value: string) => {
+    const nextPhone = value.replace(/\D/g, '');
+    if (nextPhone !== loginPhone) {
+      setOtp('');
+      setOtpRequested(false);
+      setLoginOtpCooldownSeconds(0);
+      pendingAutoLoginOtpRef.current = null;
+    }
+
+    setLoginPhone(nextPhone);
+  };
+
+  const handleForgotPasswordPhoneChange = (value: string) => {
+    const nextPhone = value.replace(/\D/g, '');
+    if (nextPhone !== forgotPasswordPhone) {
+      setForgotPasswordOtp('');
+      setForgotPasswordOtpRequested(false);
+      setForgotOtpCooldownSeconds(0);
+      setShowResetPassword(false);
+      pendingAutoForgotOtpRef.current = null;
+    }
+
+    setForgotPasswordPhone(nextPhone);
   };
 
   const handlePasswordLogin = async () => {
@@ -852,12 +910,12 @@ export function AuthScreen({
         return;
       }
 
-      Alert.alert(
+      showAlert(
         'Login failed',
         getResponseMessage(response, 'Invalid login credentials.'),
       );
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'Login failed',
         getThrownMessage(error, 'Unable to sign in right now. Please try again.'),
       );
@@ -874,13 +932,19 @@ export function AuthScreen({
 
     setSubmitAction('login-request-otp');
     try {
+      delete lastLoginOtpRef.current[formattedLoginPhone];
+      pendingAutoLoginOtpRef.current = null;
+      setOtp('');
+
       const response = await SupplierApi.requestOtp({
         phone: formattedLoginPhone,
       });
 
       console.log('handleRequestOtp', response);
+      autofillOtpFromResponse(response, 'login', formattedLoginPhone);
+
       if (hasResponseError(response)) {
-        Alert.alert(
+        showAlert(
           'OTP request failed',
           getResponseMessage(response, 'Unable to send OTP. Please try again.'),
         );
@@ -888,18 +952,14 @@ export function AuthScreen({
       }
 
       setOtpRequested(true);
+      setLoginOtpCooldownSeconds(OTP_RESEND_COOLDOWN_SECONDS);
 
-      const requestedOtp = extractOtpFromResponse(response);
-      if (requestedOtp) {
-        setOtp(requestedOtp);
-      }
-
-      Alert.alert(
+      showAlert(
         'OTP sent',
         getResponseMessage(response, 'Enter the OTP sent to your phone to continue.'),
       );
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'OTP request failed',
         getThrownMessage(error, 'Unable to send OTP right now. Please try again.'),
       );
@@ -922,16 +982,17 @@ export function AuthScreen({
       });
 
       console.log('handleOtpLogin', response);
+      autofillOtpFromResponse(response, 'login', formattedLoginPhone);
       if (completeLogin(response)) {
         return;
       }
 
-      Alert.alert(
+      showAlert(
         'OTP verification failed',
         getResponseMessage(response, 'Invalid OTP. Please try again.'),
       );
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'OTP verification failed',
         getThrownMessage(error, 'Unable to verify OTP right now. Please try again.'),
       );
@@ -939,14 +1000,45 @@ export function AuthScreen({
       setSubmitAction(null);
     }
   };
+  handleOtpLoginRef.current = handleOtpLogin;
 
   const handleLoginMethodChange = (nextMethod: SupplierLoginMethod) => {
+    if (nextMethod === loginMethod || isBusy) {
+      return;
+    }
+
+    loginModeContentProgress.stopAnimation();
+
+    LayoutAnimation.configureNext({
+      duration: 280,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        springDamping: 0.82,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+
     setLoginMethod(nextMethod);
     setPassword('');
-    setOtp('');
-    setOtpRequested(false);
     setLoginTouched({});
     setDidAttemptLogin(false);
+
+    loginModeContentProgress.setValue(0.78);
+    requestAnimationFrame(() => {
+      Animated.timing(loginModeContentProgress, {
+        toValue: 1,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
   };
 
   const handleRegisterSupplier = async () => {
@@ -978,7 +1070,7 @@ export function AuthScreen({
 
       console.log('handleRegisterSupplier', response);
       if (hasResponseError(response)) {
-        Alert.alert(
+        showAlert(
           'Registration failed',
           getResponseMessage(response, 'Unable to submit supplier registration.'),
         );
@@ -987,7 +1079,7 @@ export function AuthScreen({
 
       setShowSupplierRegistration(false);
       resetSupplierForm();
-      Alert.alert(
+      showAlert(
         'Application submitted',
         getResponseMessage(
           response,
@@ -995,7 +1087,7 @@ export function AuthScreen({
         ),
       );
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'Registration failed',
         getThrownMessage(
           error,
@@ -1015,13 +1107,19 @@ export function AuthScreen({
 
     setSubmitAction('forgot-request-otp');
     try {
+      delete lastForgotPasswordOtpRef.current[formattedForgotPasswordPhone];
+      pendingAutoForgotOtpRef.current = null;
+      setForgotPasswordOtp('');
+
       const response = await SupplierApi.requestOtp({
         phone: formattedForgotPasswordPhone,
       });
 
       console.log('handleForgotPasswordRequestOtp', response);
+      autofillOtpFromResponse(response, 'forgot', formattedForgotPasswordPhone);
+
       if (hasResponseError(response)) {
-        Alert.alert(
+        showAlert(
           'OTP request failed',
           getResponseMessage(response, 'Unable to send OTP. Please try again.'),
         );
@@ -1030,19 +1128,15 @@ export function AuthScreen({
 
       setShowResetPassword(false);
       setForgotPasswordOtpRequested(true);
+      setForgotOtpCooldownSeconds(OTP_RESEND_COOLDOWN_SECONDS);
       setForgotPasswordConfirmPassword('');
 
-      const requestedOtp = extractOtpFromResponse(response);
-      if (requestedOtp) {
-        setForgotPasswordOtp(requestedOtp);
-      }
-
-      Alert.alert(
+      showAlert(
         'OTP sent',
         getResponseMessage(response, 'Enter the OTP sent to your phone to continue.'),
       );
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'OTP request failed',
         getThrownMessage(error, 'Unable to send OTP right now. Please try again.'),
       );
@@ -1059,6 +1153,7 @@ export function AuthScreen({
 
     setShowResetPassword(true);
   };
+  handleForgotPasswordVerifyRef.current = handleForgotPasswordVerify;
 
   const handleForgotPasswordReset = async () => {
     setDidAttemptForgotPassword(true);
@@ -1075,22 +1170,23 @@ export function AuthScreen({
       });
 
       console.log('handleForgotPasswordReset', response);
+      autofillOtpFromResponse(response, 'forgot', formattedForgotPasswordPhone);
       if (hasResponseError(response)) {
-        Alert.alert(
+        showAlert(
           'Password reset failed',
           getResponseMessage(response, 'Unable to reset password. Please try again.'),
         );
         return;
       }
 
-      Alert.alert(
+      showAlert(
         'Password reset successful',
         getResponseMessage(response, 'Your password has been updated successfully.'),
       );
 
       closeForgotPassword();
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'Password reset failed',
         getThrownMessage(error, 'Unable to reset your password right now. Please try again.'),
       );
@@ -1111,37 +1207,18 @@ export function AuthScreen({
     );
   };
 
-  const renderInfoButton = (title: string, message: string) => (
-    <Pressable
-      accessibilityRole="button"
-      hitSlop={10}
-      onPress={() => Alert.alert(title, message)}
-      style={[
-        styles.infoButton,
-        {
-          backgroundColor: palette.accentSoft,
-          borderColor: palette.accentSoftBorder,
-        },
-      ]}
-    >
-      <AppText style={[styles.infoButtonText, { color: palette.accentStrong }]}>
-        i
-      </AppText>
-    </Pressable>
-  );
-
-  const renderSectionTitle = (
-    title: string,
-    infoTitle?: string,
-    infoMessage?: string,
-  ) => (
-    <View style={styles.sectionTitleRow}>
-      <AppText style={[styles.formSectionTitle, { color: palette.heading }]}>
-        {title}
-      </AppText>
-      {infoTitle && infoMessage ? renderInfoButton(infoTitle, infoMessage) : null}
-    </View>
-  );
+  // const renderSectionTitle = (
+  //   title: string,
+  //   infoTitle?: string,
+  //   infoMessage?: string,
+  // ) => (
+  //   <View style={styles.sectionTitleRow}>
+  //     <AppText style={[styles.formSectionTitle, { color: palette.heading }]}>
+  //       {title}
+  //     </AppText>
+  //     {infoTitle && infoMessage ? renderInfoButton(infoTitle, infoMessage) : null}
+  //   </View>
+  // );
 
   const renderFieldLabel = (label: string, helper?: string) => (
     <View style={styles.fieldHeader}>
@@ -1227,13 +1304,13 @@ export function AuthScreen({
               </View>
               <Image source={APP_LOGO} style={styles.loginLogo} resizeMode="contain" />
               <AppText i18nKey={titleKey} style={[styles.title, { color: palette.heading }]} />
-              <AppText style={[styles.subtitle, { color: palette.subtleText }]}>
+              {/* <AppText style={[styles.subtitle, { color: palette.subtleText }]}>
                 {t(
                   loginMethod === 'password'
                     ? 'signInWithPhonePasswordSubtitle'
                     : 'signInWithOtpSubtitle',
                 )}
-              </AppText>
+              </AppText> */}
             </Animated.View>
 
             <Animated.View
@@ -1247,7 +1324,7 @@ export function AuthScreen({
                 },
               ]}
             >
-              <View
+              {/* <View
                 style={[
                   styles.cardBanner,
                   {
@@ -1265,7 +1342,7 @@ export function AuthScreen({
                     'Use password for the fastest access. Use OTP if you need a quick verification-based sign in.',
                   )}
                 </View>
-              </View>
+              </View> */}
 
               <View
                 style={[
@@ -1284,11 +1361,7 @@ export function AuthScreen({
                   return (
                     <Pressable
                       key={method}
-                      onPress={() => {
-                        if (!isBusy) {
-                          handleLoginMethodChange(method);
-                        }
-                      }}
+                      onPress={() => handleLoginMethodChange(method)}
                       style={[
                         styles.segmentedOption,
                         selected && {
@@ -1311,7 +1384,7 @@ export function AuthScreen({
               </View>
 
               <View style={styles.formSectionBlock}>
-                {renderFieldLabel('Supplier mobile number', 'Used for login, OTP, and recovery')}
+                {/* {renderFieldLabel('Supplier mobile number', 'Used for login, OTP, and recovery')} */}
                 <View style={styles.phoneInputContainer}>
                   <AppCountryPicker
                     selectedCountry={loginCountry}
@@ -1325,7 +1398,7 @@ export function AuthScreen({
                     <AppInput
                       placeholder={t('loginPhonePlaceholder')}
                       value={loginPhone}
-                      onChangeText={value => setLoginPhone(value.replace(/\D/g, ''))}
+                      onChangeText={handleLoginPhoneChange}
                       onBlur={() => markLoginTouched('phone')}
                       keyboardType="phone-pad"
                       textContentType="telephoneNumber"
@@ -1344,126 +1417,166 @@ export function AuthScreen({
                 )}
               </View>
 
-              {loginMethod === 'password' ? (
-                <>
-                  <View style={styles.formSectionBlock}>
-                    {renderFieldLabel('Password', 'Use the password created for your supplier account')}
-                    <AppInput
-                      placeholderKey="passwordPlaceholder"
-                      value={password}
-                      onChangeText={setPassword}
-                      onBlur={() => markLoginTouched('password')}
-                      secureTextEntry
-                      textContentType="password"
-                      autoComplete="password"
-                      returnKeyType="done"
-                      editable={!isBusy}
-                      style={styles.input}
-                      hasError={
-                        shouldShowLoginError('password') && Boolean(loginErrors.password)
-                      }
+              <Animated.View style={loginModeContentAnimatedStyle}>
+                {loginMethod === 'password' ? (
+                  <>
+                    <View style={styles.formSectionBlock}>
+                      {/* {renderFieldLabel('Password', 'Use the password created for your supplier account')} */}
+                      <AppInput
+                        placeholderKey="passwordPlaceholder"
+                        value={password}
+                        onChangeText={setPassword}
+                        onBlur={() => markLoginTouched('password')}
+                        secureTextEntry
+                        textContentType="password"
+                        autoComplete="password"
+                        returnKeyType="done"
+                        editable={!isBusy}
+                        style={styles.input}
+                        hasError={
+                          shouldShowLoginError('password') && Boolean(loginErrors.password)
+                        }
+                      />
+                      {renderValidationMessage(
+                        shouldShowLoginError('password'),
+                        loginErrors.password,
+                      )}
+                    </View>
+                    <AppButton
+                      title={t('forgotPasswordLink')}
+                      onPress={openForgotPassword}
+                      variant="ghost"
+                      disabled={isBusy}
+                      style={styles.inlineActionButton}
+                      textStyle={{ color: palette.accentStrong }}
                     />
-                    {renderValidationMessage(
-                      shouldShowLoginError('password'),
-                      loginErrors.password,
-                    )}
-                  </View>
-                  <AppButton
-                    title={t('forgotPasswordLink')}
-                    onPress={openForgotPassword}
-                    variant="ghost"
-                    disabled={isBusy}
-                    style={styles.inlineActionButton}
-                    textStyle={{ color: palette.accentStrong }}
-                  />
-                  <AppButton
-                    title="Sign in securely"
-                    onPress={handlePasswordLogin}
-                    disabled={isPasswordLoginDisabled || isBusy}
-                    loading={submitAction === 'password-login'}
-                    style={[
-                      styles.primaryButton,
-                      {
-                        backgroundColor: palette.accent,
-                        borderColor: palette.accent,
-                      },
-                    ]}
-                    textStyle={{ color: palette.accentTextOnFill }}
-                  />
-                </>
-              ) : (
-                <>
-                  <AppButton
-                    title={t(otpRequested ? 'resendOtpButton' : 'requestOtpButton')}
-                    onPress={handleRequestOtp}
-                    disabled={isOtpRequestDisabled || isBusy}
-                    loading={submitAction === 'login-request-otp'}
-                    style={[
-                      styles.secondaryButton,
-                      {
-                        backgroundColor: palette.accentSoft,
-                        borderColor: palette.accentSoftBorder,
-                      },
-                    ]}
-                    textStyle={{ color: palette.accentStrong }}
-                  />
-                  {otpRequested ? (
-                    <View
+                    <AppButton
+                      title="Sign in securely"
+                      onPress={handlePasswordLogin}
+                      disabled={isPasswordLoginDisabled || isBusy}
+                      loading={submitAction === 'password-login'}
                       style={[
-                        styles.statusPanelCompact,
+                        styles.primaryButton,
+                        {
+                          backgroundColor: palette.accent,
+                          borderColor: palette.accent,
+                        },
+                      ]}
+                      textStyle={{ color: palette.accentTextOnFill }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <AppButton
+                      title={
+                        otpRequested && loginOtpCooldownSeconds > 0
+                          ? formatOtpCooldownLabel(
+                              t('resendOtpButton'),
+                              loginOtpCooldownSeconds,
+                            )
+                          : t(otpRequested ? 'resendOtpButton' : 'requestOtpButton')
+                      }
+                      onPress={handleRequestOtp}
+                      disabled={
+                        isOtpRequestDisabled || isBusy || isLoginOtpResendCoolingDown
+                      }
+                      loading={submitAction === 'login-request-otp'}
+                      style={[
+                        styles.secondaryButton,
                         {
                           backgroundColor: palette.accentSoft,
                           borderColor: palette.accentSoftBorder,
                         },
                       ]}
-                    >
-                      <AppText style={[styles.statusPanelTitle, { color: palette.heading }]}>
-                        Code sent to {maskedLoginPhone}
-                      </AppText>
-                    </View>
-                  ) : null}
-                  {otpRequested ? (
-                    <>
-                      {renderFieldLabel('Verification code', 'Enter the latest 6-digit OTP')}
-                      <OtpPinInput
-                        value={otp}
-                        onChangeText={setOtp}
-                        error={shouldShowLoginError('otp') && Boolean(loginErrors.otp)}
-                        disabled={!otpRequested}
-                      />
-                      {renderValidationMessage(
-                        shouldShowLoginError('otp'),
-                        loginErrors.otp,
-                      )}
-                      <AppText style={[styles.helperText, { color: palette.subtleText }]}>
-                        {t('otpSentHelperText')}
-                      </AppText>
-                      <AppButton
-                        title={t('resendOtpButton')}
-                        variant="ghost"
-                        onPress={handleRequestOtp}
-                        disabled={isBusy}
-                        style={styles.linkButton}
-                        textStyle={{ color: palette.accentStrong }}
-                      />
-                      <AppButton
-                        title="Verify and continue"
-                        onPress={handleOtpLogin}
-                        disabled={isOtpLoginDisabled || isBusy}
-                        loading={submitAction === 'login-otp'}
+                      textStyle={{ color: palette.accentStrong }}
+                    />
+                    {otpRequested ? (
+                      <View
                         style={[
-                          styles.primaryButton,
+                          styles.statusPanelCompact,
                           {
-                            backgroundColor: palette.accent,
-                            borderColor: palette.accent,
+                            backgroundColor: palette.accentSoft,
+                            borderColor: palette.accentSoftBorder,
                           },
                         ]}
-                        textStyle={{ color: palette.accentTextOnFill }}
-                      />
-                    </>
-                  ) : null}
-                </>
-              )}
+                      >
+                        <AppText style={[styles.statusPanelTitle, { color: palette.heading }]}>
+                          Code sent to {maskedLoginPhone}
+                        </AppText>
+                      </View>
+                    ) : null}
+                    {otpRequested ? (
+                      <>
+                        {surfacedLoginOtp ? (
+                          <View
+                            style={[
+                              styles.temporaryOtpPanel,
+                              {
+                                backgroundColor: palette.accentSoft,
+                                borderColor: palette.accentSoftBorder,
+                              },
+                            ]}
+                          >
+                            <AppText
+                              style={[styles.temporaryOtpLabel, { color: palette.subtleText }]}
+                            >
+                              Temporary OTP for testing
+                            </AppText>
+                            <AppText
+                              style={[styles.temporaryOtpValue, { color: palette.accentStrong }]}
+                            >
+                              {surfacedLoginOtp}
+                            </AppText>
+                          </View>
+                        ) : null}
+                        {renderFieldLabel('Verification code', 'Enter the latest 6-digit OTP')}
+                        <OtpPinInput
+                          value={otp}
+                          onChangeText={setOtp}
+                          error={shouldShowLoginError('otp') && Boolean(loginErrors.otp)}
+                          disabled={!otpRequested}
+                        />
+                        {renderValidationMessage(
+                          shouldShowLoginError('otp'),
+                          loginErrors.otp,
+                        )}
+                        <AppText style={[styles.helperText, { color: palette.subtleText }]}>
+                          {t('otpSentHelperText')}
+                        </AppText>
+                        <AppButton
+                          title={
+                            loginOtpCooldownSeconds > 0
+                              ? formatOtpCooldownLabel(
+                                  t('resendOtpButton'),
+                                  loginOtpCooldownSeconds,
+                                )
+                              : t('resendOtpButton')
+                          }
+                          variant="ghost"
+                          onPress={handleRequestOtp}
+                          disabled={isBusy || isLoginOtpResendCoolingDown}
+                          style={styles.linkButton}
+                          textStyle={{ color: palette.accentStrong }}
+                        />
+                        <AppButton
+                          title="Verify and continue"
+                          onPress={handleOtpLogin}
+                          disabled={isOtpLoginDisabled || isBusy}
+                          loading={submitAction === 'login-otp'}
+                          style={[
+                            styles.primaryButton,
+                            {
+                              backgroundColor: palette.accent,
+                              borderColor: palette.accent,
+                            },
+                          ]}
+                          textStyle={{ color: palette.accentTextOnFill }}
+                        />
+                      </>
+                    ) : null}
+                  </>
+                )}
+              </Animated.View>
 
               <View style={[styles.sectionDivider, { backgroundColor: palette.surfaceBorder }]} />
               <View
@@ -1475,7 +1588,7 @@ export function AuthScreen({
                   },
                 ]}
               >
-                <View style={styles.ctaPanelHeader}>
+                {/* <View style={styles.ctaPanelHeader}>
                   <AppText style={[styles.ctaPanelTitle, { color: palette.heading }]}>
                     New supplier onboarding
                   </AppText>
@@ -1483,7 +1596,7 @@ export function AuthScreen({
                     'Supplier onboarding',
                     'Share your business, compliance, and address details once. The account stays under review until verification is complete.',
                   )}
-                </View>
+                </View> */}
                 <AppButton
                   title={t('becomeSupplierButton')}
                   onPress={openSupplierRegistration}
@@ -1510,15 +1623,17 @@ export function AuthScreen({
         transparent
       >
         <SafeAreaView
-          edges={['top']}
+          edges={['left', 'right', 'bottom']}
           style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
         >
           <StatusBar barStyle={theme.statusBarStyle} />
           <ScrollView
             contentContainerStyle={[
               styles.registrationContainer,
+              { paddingTop: modalTopInset },
               { backgroundColor: palette.screenBackground },
             ]}
+            contentInsetAdjustmentBehavior="never"
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -1578,11 +1693,11 @@ export function AuthScreen({
                 <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
                   ACCOUNT ACCESS
                 </AppText>
-                {renderSectionTitle(
+                {/* {renderSectionTitle(
                   'Contact and sign-in details',
                   'Account access',
                   'These details help your team sign in and help us verify who owns the supplier account.',
-                )}
+                )} */}
 
                 {renderFieldLabel('Business name')}
                 <AppInput
@@ -1706,11 +1821,11 @@ export function AuthScreen({
                 <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
                   BUSINESS IDENTITY
                 </AppText>
-                {renderSectionTitle(
+                {/* {renderSectionTitle(
                   'Compliance details',
                   'Compliance details',
                   'GSTIN is required for review. CIN is optional when applicable to your business registration.',
-                )}
+                )} */}
 
                 {renderFieldLabel('GSTIN')}
                 <AppInput
@@ -1757,11 +1872,11 @@ export function AuthScreen({
                 <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
                   ADDRESS DETAILS
                 </AppText>
-                {renderSectionTitle(
+                {/* {renderSectionTitle(
                   'Business location',
                   'Business address',
                   'A complete and accurate address helps speed up supplier approval and operations setup later.',
-                )}
+                )} */}
 
                 {renderFieldLabel('Address line 1')}
                 <AppInput
@@ -1889,7 +2004,7 @@ export function AuthScreen({
         transparent
       >
         <SafeAreaView
-          edges={['top']}
+          edges={['left', 'right', 'bottom']}
           style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
         >
           <StatusBar barStyle={theme.statusBarStyle} />
@@ -1897,8 +2012,10 @@ export function AuthScreen({
             contentContainerStyle={[
               styles.registrationContainer,
               styles.forgotPasswordContainer,
+              { paddingTop: modalTopInset },
               { backgroundColor: palette.screenBackground },
             ]}
+            contentInsetAdjustmentBehavior="never"
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -1953,7 +2070,7 @@ export function AuthScreen({
                 },
               ]}
             >
-              <View
+              {/* <View
                 style={[
                   styles.statusPanel,
                   {
@@ -1968,11 +2085,11 @@ export function AuthScreen({
                 <AppText style={[styles.statusPanelBody, { color: palette.subtleText }]}>
                   {t('forgotPasswordRecoveryNote')}
                 </AppText>
-              </View>
+              </View> */}
 
               {!showResetPassword ? (
                 <>
-                  {renderFieldLabel('Registered mobile number', 'We will send a one-time code here')}
+                  {/* {renderFieldLabel('Registered mobile number', 'We will send a one-time code here')} */}
                   <View style={styles.phoneInputContainer}>
                     <AppCountryPicker
                       selectedCountry={forgotPasswordCountry}
@@ -1986,7 +2103,7 @@ export function AuthScreen({
                       <AppInput
                         placeholder={t('loginPhonePlaceholder')}
                         value={forgotPasswordPhone}
-                        onChangeText={value => setForgotPasswordPhone(value.replace(/\D/g, ''))}
+                        onChangeText={handleForgotPasswordPhoneChange}
                         onBlur={() => markForgotPasswordTouched('phone')}
                         keyboardType="phone-pad"
                         textContentType="telephoneNumber"
@@ -2008,9 +2125,19 @@ export function AuthScreen({
                   )}
 
                   <AppButton
-                    title={forgotPasswordOtpRequested ? 'Resend code' : 'Send recovery code'}
+                    title={
+                      forgotPasswordOtpRequested && forgotOtpCooldownSeconds > 0
+                        ? formatOtpCooldownLabel('Resend code', forgotOtpCooldownSeconds)
+                        : forgotPasswordOtpRequested
+                          ? 'Resend code'
+                          : 'Send recovery code'
+                    }
                     onPress={handleForgotPasswordRequestOtp}
-                    disabled={isForgotPasswordRequestDisabled || isBusy}
+                    disabled={
+                      isForgotPasswordRequestDisabled ||
+                      isBusy ||
+                      isForgotOtpResendCoolingDown
+                    }
                     loading={submitAction === 'forgot-request-otp'}
                     style={[
                       styles.secondaryButton,
@@ -2042,6 +2169,28 @@ export function AuthScreen({
                       Enter the latest OTP below to continue with your password reset.
                     </AppText>
                   </View>
+                  {surfacedForgotPasswordOtp ? (
+                    <View
+                      style={[
+                        styles.temporaryOtpPanel,
+                        {
+                          backgroundColor: palette.accentSoft,
+                          borderColor: palette.accentSoftBorder,
+                        },
+                      ]}
+                    >
+                      <AppText
+                        style={[styles.temporaryOtpLabel, { color: palette.subtleText }]}
+                      >
+                        Temporary OTP for testing
+                      </AppText>
+                      <AppText
+                        style={[styles.temporaryOtpValue, { color: palette.accentStrong }]}
+                      >
+                        {surfacedForgotPasswordOtp}
+                      </AppText>
+                    </View>
+                  ) : null}
                   {renderFieldLabel('Verification code')}
                   <OtpPinInput
                     value={forgotPasswordOtp}
@@ -2390,14 +2539,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 58,
     borderWidth: 1,
-    borderColor: '#B8D7D4',
+    borderColor: '#C7E6F8',
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.7)',
   },
   otpPinCellFocused: {
-    borderColor: '#0F766E',
+    borderColor: '#0EA5E9',
   },
   otpPinCellError: {
     borderColor: '#DC2626',
@@ -2470,6 +2619,23 @@ const styles = StyleSheet.create({
   statusPanelBody: {
     fontSize: 13,
     lineHeight: 19,
+  },
+  temporaryOtpPanel: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  temporaryOtpLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  temporaryOtpValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 3,
   },
   inlineActionButton: {
     minHeight: 0,

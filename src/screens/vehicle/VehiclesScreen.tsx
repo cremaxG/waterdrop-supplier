@@ -504,7 +504,7 @@ export function VehiclesScreen({
     if (vehicle.isOnline) {
       return {
         label: t('vehicleStatusOnline'),
-        accentColor: '#059669',
+        accentColor: '#0284C7',
         tone: 'success' as const,
       };
     }
@@ -519,9 +519,9 @@ export function VehiclesScreen({
   const getFilterChipColors = (tone: VehicleFilterTone, isSelected: boolean) => {
     if (tone === 'success') {
       return {
-        backgroundColor: isSelected ? '#DCFCE7' : '#F0FDF4',
-        borderColor: isSelected ? '#86EFAC' : '#BBF7D0',
-        textColor: '#059669',
+        backgroundColor: isSelected ? '#E0F2FE' : '#F0F9FF',
+        borderColor: isSelected ? '#7DD3FC' : '#BAE6FD',
+        textColor: '#0284C7',
       };
     }
 

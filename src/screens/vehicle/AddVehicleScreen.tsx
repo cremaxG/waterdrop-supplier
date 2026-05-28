@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -19,6 +18,7 @@ import {
   AppFieldMessage,
   AppInput,
   AppText,
+  AppWaterLoader,
 } from '../../components';
 import { VehicleSectionCard } from '../../components/vehicles';
 import { useAppPalette } from '../../hooks/useAppPalette';
@@ -740,7 +740,7 @@ export function AddVehicleScreen({
             />
             {isSearchingLocations ? (
               <View style={styles.searchLoadingRow}>
-                <ActivityIndicator color={palette.accentStrong} />
+                <AppWaterLoader size={18} />
                 <AppText style={[styles.searchLoadingText, { color: palette.muted }]}>
                   {t('vehicleAddLocationSearchingLabel')}
                 </AppText>
@@ -844,7 +844,7 @@ export function AddVehicleScreen({
           <AppFieldMessage message={locationPickerError} />
           {isResolvingAddress ? (
             <View style={styles.searchLoadingRow}>
-              <ActivityIndicator color={palette.accentStrong} />
+              <AppWaterLoader size={18} />
               <AppText style={[styles.searchLoadingText, { color: palette.muted }]}>
                 {t('vehicleAddLocationResolvingLabel')}
               </AppText>

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   PressableProps,
   StyleProp,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { useAppPalette } from '../hooks/useAppPalette';
 import { useTranslation } from '../providers/AppProviders';
+import { AppWaterLoader } from './AppWaterLoader';
 
 type AppButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
@@ -87,8 +87,9 @@ export function AppButton({
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator
-          color={isPrimary || isDanger ? '#FFFFFF' : palette.accentStrong}
+        <AppWaterLoader
+          size={20}
+          tone={isPrimary || isDanger ? 'light' : 'accent'}
         />
       ) : (
         <Text

@@ -1,5 +1,174 @@
 import BaseApi from './baseApi';
 
+function sanitizeOtpCandidate(value: unknown) {
+  if (value == null) {
+    return null;
+  }
+
+  const otpString = String(value).replace(/\D/g, '');
+  if (otpString.length < 4 || otpString.length > 8) {
+    return null;
+  }
+
+  return otpString;
+}
+
+function extractOtpFromText(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const patterns = [
+    /\botp(?:\s*(?:is|code|:|=|-))?\s*(\d{4,8})\b/i,
+    /\bverification(?:\s*code)?(?:\s*(?:is|:|=|-))?\s*(\d{4,8})\b/i,
+    /\bcode(?:\s*(?:is|:|=|-))?\s*(\d{4,8})\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    const otp = sanitizeOtpCandidate(match?.[1]);
+    if (otp) {
+      return otp;
+    }
+  }
+
+  return null;
+}
+
+export function extractOtpFromResponse(response: unknown) {
+  const stringifiedResponse =
+    response && typeof response === 'object'
+      ? JSON.stringify(response)
+      : typeof response === 'string'
+        ? response
+        : '';
+
+  const directCandidates = [
+    (response as any)?.otp,
+    (response as any)?.data?.otp,
+    (response as any)?.data?.data?.otp,
+    (response as any)?.verification_code,
+    (response as any)?.verificationCode,
+    (response as any)?.data?.verification_code,
+    (response as any)?.data?.verificationCode,
+    (response as any)?.data?.code,
+    (response as any)?.code,
+  ];
+
+  for (const candidate of directCandidates) {
+    const otp = sanitizeOtpCandidate(candidate);
+    if (otp) {
+      return otp;
+    }
+  }
+
+  if (!response || typeof response !== 'object') {
+    const directTextOtp = extractOtpFromText(response);
+    if (directTextOtp) {
+      return directTextOtp;
+    }
+
+    const genericTextOtp = sanitizeOtpCandidate(
+      stringifiedResponse.match(/\b(\d{4,8})\b/)?.[1],
+    );
+    return genericTextOtp ?? null;
+  }
+
+  const visited = new WeakSet<object>();
+  const queue: unknown[] = [response];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    const fromText = extractOtpFromText(current);
+    if (fromText) {
+      return fromText;
+    }
+
+    if (typeof current !== 'object') {
+      continue;
+    }
+
+    if (visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      const normalizedKey = key.toLowerCase();
+
+      if (
+        normalizedKey.includes('otp') ||
+        normalizedKey.includes('code') ||
+        normalizedKey.includes('message')
+      ) {
+        const directOtp =
+          sanitizeOtpCandidate(value) ?? extractOtpFromText(value);
+        if (directOtp) {
+          return directOtp;
+        }
+      }
+
+      if (value && typeof value === 'object') {
+        queue.push(value);
+      } else if (typeof value === 'string') {
+        queue.push(value);
+      }
+    }
+  }
+
+  const fallbackOtpPatterns = [
+    /"otp"\s*:\s*"?(\d{4,8})"?/i,
+    /"verification[_\s-]?code"\s*:\s*"?(\d{4,8})"?/i,
+    /"code"\s*:\s*"?(\d{4,8})"?/i,
+  ];
+
+  for (const pattern of fallbackOtpPatterns) {
+    const otp = sanitizeOtpCandidate(stringifiedResponse.match(pattern)?.[1]);
+    if (otp) {
+      return otp;
+    }
+  }
+
+  const genericOtp = sanitizeOtpCandidate(
+    stringifiedResponse.match(/\b(\d{4,8})\b/)?.[1],
+  );
+  if (genericOtp) {
+    return genericOtp;
+  }
+
+  return null;
+}
+
+function withExtractedOtp<T>(response: T): T {
+  if (!response || typeof response !== 'object') {
+    return response;
+  }
+
+  const existingOtp = sanitizeOtpCandidate((response as any).otp);
+  if (existingOtp) {
+    return response;
+  }
+
+  const extractedOtp = extractOtpFromResponse(response);
+  if (!extractedOtp) {
+    return response;
+  }
+
+  return {
+    ...(response as Record<string, unknown>),
+    otp: extractedOtp,
+  } as T;
+}
+
 export interface SupplierRegisterPayload {
   name: string;
   phone: string;
@@ -176,23 +345,23 @@ export interface SupplierDiscountPayload {
 
 export default class SupplierApi {
   static registerSupplier(payload: SupplierRegisterPayload) {
-    return BaseApi.post('/auth/suppliers/register', payload, {}, {}, '');
+    return BaseApi.post('/auth/suppliers/register', payload, {}, {}, '').then(withExtractedOtp);
   }
 
   static loginSupplier(payload: SupplierLoginPayload) {
-    return BaseApi.post('/auth/suppliers/login', payload, {}, {}, '');
+    return BaseApi.post('/auth/suppliers/login', payload, {}, {}, '').then(withExtractedOtp);
   }
 
   static requestOtp(payload: SupplierOtpRequestPayload) {
-    return BaseApi.post('/auth/suppliers/request-otp', payload, {}, {}, '');
+    return BaseApi.post('/auth/suppliers/request-otp', payload, {}, {}, '').then(withExtractedOtp);
   }
 
   static loginWithOtp(payload: SupplierOtpLoginPayload) {
-    return BaseApi.post('/auth/suppliers/login-otp', payload, {}, {}, '');
+    return BaseApi.post('/auth/suppliers/login-otp', payload, {}, {}, '').then(withExtractedOtp);
   }
 
   static resetPassword(payload: SupplierResetPasswordPayload) {
-    return BaseApi.post('/auth/suppliers/reset-password', payload, {}, {}, '');
+    return BaseApi.post('/auth/suppliers/reset-password', payload, {}, {}, '').then(withExtractedOtp);
   }
 
   static getSupplierProfile() {

@@ -13,17 +13,17 @@ export interface Theme {
 
 export const themes: Record<ThemeName, Theme> = {
   light: {
-    background: '#F6F9FC',
-    text: '#1F2937',
+    background: '#F0FBFF',
+    text: '#0B1F33',
     card: '#FFFFFF',
-    border: '#D1D5DB',
+    border: '#D7E9F5',
     statusBarStyle: 'dark-content',
   },
   dark: {
-    background: '#0F172A',
-    text: '#F8FAFC',
-    card: '#1E293B',
-    border: '#334155',
+    background: '#071827',
+    text: '#F3FBFF',
+    card: '#102235',
+    border: '#1F3A4D',
     statusBarStyle: 'light-content',
   },
 };
