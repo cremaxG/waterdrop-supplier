@@ -1,0 +1,542 @@
+import { StyleSheet } from 'react-native';
+
+export const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  container: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  registrationContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 24,
+    flexGrow: 1,
+  },
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 22,
+  },
+  heroBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginBottom: 16,
+  },
+  heroBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  loginLogo: {
+    width: 88,
+    height: 88,
+    marginBottom: 14,
+  },
+  registrationHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 14,
+  },
+  registrationLogo: {
+    width: 62,
+    height: 62,
+  },
+  registrationHeaderCopy: {
+    flex: 1,
+  },
+  modalBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 10,
+  },
+  modalBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    maxWidth: 300,
+  },
+  registrationTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  registrationSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: 30,
+    padding: 20,
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: {
+      width: 0,
+      height: 12,
+    },
+    elevation: 4,
+  },
+  cardBanner: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 14,
+    marginBottom: 18,
+  },
+  cardBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  cardBannerTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  segmentedControl: {
+    borderWidth: 1,
+    borderRadius: 18,
+    flexDirection: 'row',
+    padding: 4,
+    marginBottom: 18,
+    gap: 4,
+  },
+  segmentedOption: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  segmentedOptionText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  formSectionBlock: {
+    marginBottom: 2,
+  },
+  formSectionEyebrow: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    marginBottom: 12,
+  },
+  sectionTitleBlock: {
+    marginBottom: 14,
+  },
+  sectionOverline: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  sectionHelper: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  fieldHeader: {
+    marginBottom: 8,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  fieldHelperInline: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  input: {
+    marginBottom: 10,
+  },
+  compactInput: {
+    marginBottom: 8,
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dialCode: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginHorizontal: 8,
+  },
+  phoneInput: {
+    flex: 1,
+    marginLeft: 0,
+  },
+  doubleFieldRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  doubleFieldCell: {
+    flex: 1,
+  },
+  otpPinContainer: {
+    marginBottom: 8,
+  },
+  otpHiddenInput: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+  },
+  otpPinRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  otpPinCell: {
+    flex: 1,
+    minHeight: 58,
+    borderWidth: 1,
+    borderColor: '#C7E6F8',
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  otpPinCellFocused: {
+    borderColor: '#0EA5E9',
+  },
+  otpPinCellError: {
+    borderColor: '#DC2626',
+  },
+  otpPinText: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  validationText: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  primaryButton: {
+    minHeight: 52,
+    borderRadius: 18,
+    marginTop: 8,
+  },
+  modalPrimaryButton: {
+    marginTop: 18,
+  },
+  ctaButton: {
+    minHeight: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  secondaryButton: {
+    minHeight: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  modalSecondaryButton: {
+    minHeight: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  helperText: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: -2,
+    marginBottom: 10,
+  },
+  helperCopy: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+  statusPanelCompact: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  statusPanel: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+  },
+  statusPanelTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  statusPanelBody: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  temporaryOtpPanel: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  temporaryOtpLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  temporaryOtpValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 3,
+  },
+  inlineActionButton: {
+    minHeight: 0,
+    alignSelf: 'flex-end',
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    marginTop: -2,
+    marginBottom: 10,
+  },
+  linkButton: {
+    borderWidth: 0,
+    minHeight: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  locationSummaryCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    gap: 6,
+    marginBottom: 12,
+  },
+  locationSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  locationSummaryLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  locationOptionalLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  locationSummaryValue: {
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  locationAddressValue: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  locationSummaryHint: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  locationActionButton: {
+    borderWidth: 1,
+    borderRadius: 18,
+    marginBottom: 12,
+  },
+  locationUtilityButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 0,
+    minHeight: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    marginTop: 4,
+  },
+  mapPickerScreen: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 24,
+  },
+  mapPickerBackButton: {
+    marginBottom: 14,
+    alignSelf: 'flex-start',
+  },
+  mapPickerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  mapPickerSubtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  mapSearchCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    gap: 10,
+    marginBottom: 14,
+  },
+  searchLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchLoadingText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  searchResultsCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  searchResultRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  searchResultTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  searchResultSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  mapCard: {
+    borderWidth: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 14,
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    elevation: 4,
+  },
+  map: {
+    width: '100%',
+    height: 280,
+  },
+  mapSelectionCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    gap: 6,
+    marginBottom: 10,
+  },
+  mapSelectionValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 21,
+  },
+  mapSelectionCoordinates: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  stepChip: {
+    flex: 1,
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+  },
+  stepDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  stepLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sectionDivider: {
+    height: 1,
+    marginVertical: 18,
+  },
+  ctaPanel: {
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 16,
+    gap: 14,
+  },
+  ctaPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  ctaPanelTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  infoButton: {
+    width: 24,
+    height: 24,
+    borderWidth: 1,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  forgotPasswordContainer: {
+    paddingTop: 18,
+  },
+});
