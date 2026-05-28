@@ -13,12 +13,14 @@ import { AppText } from './AppText';
 interface AppBackButtonProps {
   onPress: () => void;
   label?: string;
+  showLabel?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
 export function AppBackButton({
   onPress,
   label,
+  showLabel,
   style,
 }: AppBackButtonProps) {
   const palette = useAppPalette();
@@ -45,7 +47,7 @@ export function AppBackButton({
       >
         <AppIcon name="back" size={18} color={palette.accentStrong} />
       </View>
-      {label ? (
+      {label && showLabel ? (
         <AppText style={[styles.label, { color: palette.accentStrong }]}>
           {label}
         </AppText>

@@ -1934,7 +1934,7 @@ export function AuthScreen({
                       textStyle={{ color: palette.accentStrong }}
                     />
                     <AppButton
-                      title="Sign in securely"
+                      title={t('authSignInSecurelyButton')}
                       onPress={handlePasswordLogin}
                       disabled={isPasswordLoginDisabled || isBusy}
                       loading={submitAction === 'password-login'}
@@ -3108,14 +3108,16 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   registrationHeaderRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
+    alignContent: 'center',
     marginBottom: 16,
     gap: 14,
   },
   registrationLogo: {
-    width: 60,
-    height: 60,
+    width: 88,
+    height: 88,
+    marginBottom: 14,
   },
   registrationHeaderCopy: {
     flex: 1,

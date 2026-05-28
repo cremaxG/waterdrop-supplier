@@ -131,6 +131,7 @@ export function DashboardScreen({
     <AppRefreshScrollView
       onRefresh={() => Promise.all([refreshVehicles(), refreshProducts()]).then(() => undefined)}
     >
+      
       <View
         style={[
           styles.heroCard,
@@ -159,11 +160,11 @@ export function DashboardScreen({
         </View>
         <View style={styles.heroBadge}>
           <AppIcon name="water" size={24} color={palette.accentStrong} />
-          <AppText style={[styles.heroBadgeText, { color: palette.accentStrong }]}>
-            {t('appTitle')}
+          <AppText style={[styles.heroTitle, { color: palette.accentStrong }]}>
+          {t('COMING SOON')}
           </AppText>
         </View>
-        <AppText style={[styles.heroTitle, { color: palette.text }]}>
+        {/* <AppText style={[styles.heroTitle, { color: palette.text }]}>
           {t('dashboardHeading')}
         </AppText>
         <AppText style={[styles.heroSubtitle, { color: palette.muted }]}>
@@ -199,10 +200,10 @@ export function DashboardScreen({
               </AppText>
             </View>
           ))}
-        </View>
+        </View> */}
       </View>
 
-      <View style={styles.statusStrip}>
+      {/* <View style={styles.statusStrip}>
         {[
           {
             label: t('dashboardOnlineVehiclesLabel'),
@@ -516,7 +517,7 @@ export function DashboardScreen({
             </Pressable>
           ))}
         </View>
-      </View>
+      </View> */}
     </AppRefreshScrollView>
   );
 }

@@ -25,8 +25,17 @@ export interface ProductRecord {
   id: string;
   name: string;
   sku: string;
+  supplierId: string;
+  price: string;
+  taxCode: string;
+  discount: string;
+  includingGst: boolean;
+  brand: string;
   category: string;
+  status: string;
   unitLabel: string;
+  createdAt: string;
+  updatedAt: string;
   totalStock: number;
   godownInventory: number;
   demand: string;
