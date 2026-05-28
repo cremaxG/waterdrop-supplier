@@ -15,6 +15,12 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import MapView, {
+  MapPressEvent,
+  Marker,
+  MarkerDragStartEndEvent,
+  Region,
+} from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppBackButton,
@@ -22,6 +28,8 @@ import {
   AppCountryPicker,
   AppInput,
   AppText,
+  AppWaterLoader,
+  AuthWaterBackdrop,
 } from '../../components';
 import { Country, DEFAULT_COUNTRY } from '../../constants/countries';
 import { useAppAlert, useTheme, useTranslation } from '../../providers/AppProviders';
@@ -56,6 +64,7 @@ type SubmitAction =
   | null;
 
 const OTP_RESEND_COOLDOWN_SECONDS = 45;
+const OTP_AUTOFILL_DELAY_MS = 450;
 
 export interface AuthScreenProps {
   onSignIn?: (token: string) => void;
@@ -63,6 +72,33 @@ export interface AuthScreenProps {
   titleKey?: string;
   subtitleKey?: string;
 }
+
+interface LocationValue {
+  lat: string;
+  lng: string;
+}
+
+interface SupplierResolvedAddress {
+  displayName: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  postalCode: string;
+  state: string;
+}
+
+interface LocationSearchResult extends LocationValue, SupplierResolvedAddress {
+  id: string;
+  title: string;
+  subtitle: string;
+}
+
+const DEFAULT_MAP_REGION: Region = {
+  latitude: 20.5937,
+  longitude: 78.9629,
+  latitudeDelta: 12,
+  longitudeDelta: 12,
+};
 
 function isEmail(value: string) {
   return /\S+@\S+\.\S+/.test(value.trim());
@@ -127,6 +163,202 @@ function maskPhoneNumber(value: string) {
     .trim();
 
   return `${maskedPrefix} ${tail}`.trim();
+}
+
+function isValidCoordinate(value: string, min: number, max: number) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= min && numeric <= max;
+}
+
+function normalizeLocationValue(
+  lat?: string | null,
+  lng?: string | null,
+): LocationValue | null {
+  const normalizedLat = String(lat ?? '').trim();
+  const normalizedLng = String(lng ?? '').trim();
+
+  if (!normalizedLat || !normalizedLng) {
+    return null;
+  }
+
+  if (
+    !isValidCoordinate(normalizedLat, -90, 90) ||
+    !isValidCoordinate(normalizedLng, -180, 180)
+  ) {
+    return null;
+  }
+
+  return {
+    lat: normalizedLat,
+    lng: normalizedLng,
+  };
+}
+
+function getMapRegion(location: LocationValue | null): Region {
+  if (!location) {
+    return DEFAULT_MAP_REGION;
+  }
+
+  return {
+    latitude: Number(location.lat),
+    longitude: Number(location.lng),
+    latitudeDelta: 0.08,
+    longitudeDelta: 0.08,
+  };
+}
+
+function formatLocationValue(location: LocationValue | null) {
+  if (!location) {
+    return '';
+  }
+
+  return `${Number(location.lat).toFixed(5)}, ${Number(location.lng).toFixed(5)}`;
+}
+
+function getSupplierResolvedAddress(result: any): SupplierResolvedAddress {
+  const address = result?.address ?? {};
+  const city =
+    address.city ??
+    address.town ??
+    address.village ??
+    address.hamlet ??
+    address.municipality ??
+    address.county ??
+    '';
+  const road =
+    address.road ??
+    address.pedestrian ??
+    address.neighbourhood ??
+    address.suburb ??
+    '';
+  const addressLine1Parts = [address.house_number, road].filter(Boolean);
+  const addressLine1 =
+    addressLine1Parts.join(' ').trim() ||
+    road ||
+    city ||
+    'Selected location';
+
+  const addressLine2Candidates = [
+    address.neighbourhood,
+    address.suburb,
+    address.city_district,
+    address.county,
+  ]
+    .filter(Boolean)
+    .filter((value, index, arr) => arr.indexOf(value) === index)
+    .filter(value => value !== city && value !== road);
+
+  return {
+    displayName: result?.display_name ?? '',
+    addressLine1,
+    addressLine2: addressLine2Candidates.join(', '),
+    city,
+    postalCode: String(address.postcode ?? '').trim(),
+    state: String(address.state ?? address.state_district ?? '').trim(),
+  };
+}
+
+function formatAddressParts(result: any) {
+  const address = result?.address ?? {};
+  const title =
+    address.road ??
+    address.neighbourhood ??
+    address.suburb ??
+    address.village ??
+    address.town ??
+    address.city ??
+    address.county ??
+    'Selected location';
+
+  const subtitleParts = [
+    address.suburb,
+    address.city ?? address.town ?? address.village,
+    address.state,
+    address.postcode,
+    address.country,
+  ].filter(Boolean);
+
+  return {
+    title,
+    subtitle: subtitleParts.join(', '),
+  };
+}
+
+async function searchLocations(query: string): Promise<LocationSearchResult[]> {
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&countrycodes=in&q=${encodeURIComponent(query)}`,
+    {
+      headers: {
+        Accept: 'application/json',
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error('Unable to search locations right now.');
+  }
+
+  const results = await response.json();
+  return Array.isArray(results)
+    ? results
+        .map((item: any) => {
+          const location = normalizeLocationValue(item.lat, item.lon);
+          if (!location) {
+            return null;
+          }
+
+          const address = formatAddressParts(item);
+          const resolvedAddress = getSupplierResolvedAddress(item);
+          return {
+            id: String(item.place_id ?? `${location.lat}-${location.lng}`),
+            lat: location.lat,
+            lng: location.lng,
+            title: address.title,
+            subtitle: item.display_name ?? address.subtitle,
+            ...resolvedAddress,
+          };
+        })
+        .filter((item): item is LocationSearchResult => Boolean(item))
+    : [];
+}
+
+async function reverseGeocodeSupplierLocation(
+  location: LocationValue,
+): Promise<SupplierResolvedAddress> {
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(location.lat)}&lon=${encodeURIComponent(location.lng)}&zoom=18&addressdetails=1`,
+    {
+      headers: {
+        Accept: 'application/json',
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error('Unable to fetch location address right now.');
+  }
+
+  const result = await response.json();
+  return getSupplierResolvedAddress(result);
+}
+
+function buildSupplierAddressSummary({
+  addressLine1,
+  addressLine2,
+  city,
+  postalCode,
+  state,
+}: {
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  postalCode: string;
+  state: string;
+}) {
+  return [addressLine1, addressLine2, city, state, postalCode]
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join(', ');
 }
 
 interface OtpPinInputProps {
@@ -210,6 +442,11 @@ export function AuthScreen({
     accentTextOnFill: '#F8FAFC',
     decorTop: isDark ? 'rgba(34, 211, 238, 0.18)' : 'rgba(14, 165, 233, 0.18)',
     decorBottom: isDark ? 'rgba(59, 130, 246, 0.18)' : 'rgba(2, 132, 199, 0.14)',
+    glassFrost: isDark ? 'rgba(10, 37, 64, 0.3)' : 'rgba(255, 255, 255, 0.5)',
+    glassMist: isDark ? 'rgba(125, 211, 252, 0.14)' : 'rgba(186, 230, 253, 0.34)',
+    dropletFill: isDark ? 'rgba(186, 230, 253, 0.12)' : 'rgba(255, 255, 255, 0.46)',
+    dropletEdge: isDark ? 'rgba(125, 211, 252, 0.26)' : 'rgba(125, 211, 252, 0.4)',
+    dropletHighlight: isDark ? 'rgba(240, 249, 255, 0.18)' : 'rgba(255, 255, 255, 0.72)',
     shadow: isDark ? '#020617' : '#0F172A',
     error: isDark ? '#FCA5A5' : '#DC2626',
   };
@@ -225,6 +462,8 @@ export function AuthScreen({
   const lastForgotPasswordOtpRef = useRef<Record<string, string>>({});
   const pendingAutoLoginOtpRef = useRef<{ phone: string; otp: string } | null>(null);
   const pendingAutoForgotOtpRef = useRef<{ phone: string; otp: string } | null>(null);
+  const loginOtpAutofillTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const forgotOtpAutofillTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleOtpLoginRef = useRef<() => void>(() => {});
   const handleForgotPasswordVerifyRef = useRef<() => void>(() => {});
 
@@ -258,6 +497,22 @@ export function AuthScreen({
   const [supplierCity, setSupplierCity] = useState('');
   const [supplierPostalCode, setSupplierPostalCode] = useState('');
   const [supplierState, setSupplierState] = useState('');
+  const [isSupplierAddressPickerVisible, setSupplierAddressPickerVisible] = useState(false);
+  const [supplierAddressLocation, setSupplierAddressLocation] = useState<LocationValue | null>(
+    null,
+  );
+  const [supplierAddressDisplay, setSupplierAddressDisplay] = useState('');
+  const [supplierAddressMapSelection, setSupplierAddressMapSelection] =
+    useState<LocationValue | null>(null);
+  const [supplierAddressMapSelectionDetails, setSupplierAddressMapSelectionDetails] =
+    useState<SupplierResolvedAddress | null>(null);
+  const [supplierAddressSearchQuery, setSupplierAddressSearchQuery] = useState('');
+  const [supplierAddressSearchResults, setSupplierAddressSearchResults] = useState<
+    LocationSearchResult[]
+  >([]);
+  const [isSearchingSupplierAddresses, setSearchingSupplierAddresses] = useState(false);
+  const [isResolvingSupplierAddress, setResolvingSupplierAddress] = useState(false);
+  const [supplierAddressPickerError, setSupplierAddressPickerError] = useState('');
   const [submitAction, setSubmitAction] = useState<SubmitAction>(null);
   const [loginTouched, setLoginTouched] = useState<Partial<Record<LoginField, boolean>>>({});
   const [forgotPasswordTouched, setForgotPasswordTouched] = useState<
@@ -270,6 +525,10 @@ export function AuthScreen({
   const [didAttemptForgotPassword, setDidAttemptForgotPassword] = useState(false);
   const [didAttemptRegister, setDidAttemptRegister] = useState(false);
 
+  const supplierAddressMapRef = useRef<MapView | null>(null);
+  const supplierAddressSearchRequestIdRef = useRef(0);
+  const supplierAddressReverseRequestIdRef = useRef(0);
+  const skipNextSupplierAddressSearchRef = useRef(false);
   const normalizedLoginPhone = loginPhone.replace(/\D/g, '');
   const normalizedForgotPasswordPhone = forgotPasswordPhone.replace(/\D/g, '');
   const normalizedSupplierPhone = supplierPhone.replace(/\D/g, '');
@@ -280,6 +539,13 @@ export function AuthScreen({
   const surfacedLoginOtp = otp || lastLoginOtpRef.current[formattedLoginPhone] || '';
   const surfacedForgotPasswordOtp =
     forgotPasswordOtp || lastForgotPasswordOtpRef.current[formattedForgotPasswordPhone] || '';
+  const supplierAddressSummary = buildSupplierAddressSummary({
+    addressLine1: supplierAddressLine1,
+    addressLine2: supplierAddressLine2,
+    city: supplierCity,
+    postalCode: supplierPostalCode,
+    state: supplierState,
+  });
   const normalizedGstin = supplierGstin.trim().toUpperCase();
   const normalizedCin = supplierCin.trim().toUpperCase();
 
@@ -384,6 +650,17 @@ export function AuthScreen({
   ]);
 
   useEffect(() => {
+    return () => {
+      if (loginOtpAutofillTimeoutRef.current) {
+        clearTimeout(loginOtpAutofillTimeoutRef.current);
+      }
+      if (forgotOtpAutofillTimeoutRef.current) {
+        clearTimeout(forgotOtpAutofillTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (loginOtpCooldownSeconds <= 0) {
       return;
     }
@@ -410,6 +687,103 @@ export function AuthScreen({
       clearTimeout(timeoutId);
     };
   }, [forgotOtpCooldownSeconds]);
+
+  useEffect(() => {
+    if (!isSupplierAddressPickerVisible) {
+      return;
+    }
+
+    const fallbackAddress = supplierAddressDisplay || supplierAddressSummary;
+    const fallbackDetails: SupplierResolvedAddress | null = fallbackAddress
+      ? {
+          displayName: fallbackAddress,
+          addressLine1: supplierAddressLine1,
+          addressLine2: supplierAddressLine2,
+          city: supplierCity,
+          postalCode: supplierPostalCode,
+          state: supplierState,
+        }
+      : null;
+
+    setSupplierAddressMapSelection(supplierAddressLocation);
+    setSupplierAddressMapSelectionDetails(fallbackDetails);
+    skipNextSupplierAddressSearchRef.current = true;
+    setSupplierAddressSearchQuery(fallbackAddress);
+    setSupplierAddressSearchResults([]);
+    setSupplierAddressPickerError('');
+
+    requestAnimationFrame(() => {
+      supplierAddressMapRef.current?.animateToRegion(
+        getMapRegion(supplierAddressLocation),
+        260,
+      );
+    });
+  }, [
+    isSupplierAddressPickerVisible,
+    supplierAddressDisplay,
+    supplierAddressLine1,
+    supplierAddressLine2,
+    supplierAddressLocation,
+    supplierAddressSummary,
+    supplierCity,
+    supplierPostalCode,
+    supplierState,
+  ]);
+
+  useEffect(() => {
+    if (!isSupplierAddressPickerVisible) {
+      return;
+    }
+
+    const trimmedQuery = supplierAddressSearchQuery.trim();
+    if (skipNextSupplierAddressSearchRef.current) {
+      skipNextSupplierAddressSearchRef.current = false;
+      return;
+    }
+
+    if (trimmedQuery.length < 3) {
+      setSupplierAddressSearchResults([]);
+      setSearchingSupplierAddresses(false);
+      return;
+    }
+
+    const requestId = ++supplierAddressSearchRequestIdRef.current;
+    setSearchingSupplierAddresses(true);
+    setSupplierAddressPickerError('');
+
+    const timeoutId = setTimeout(() => {
+      searchLocations(trimmedQuery)
+        .then(results => {
+          if (supplierAddressSearchRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          setSupplierAddressSearchResults(results);
+          if (!results.length) {
+            setSupplierAddressPickerError('No matching addresses found.');
+          }
+        })
+        .catch((error: any) => {
+          if (supplierAddressSearchRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          setSupplierAddressSearchResults([]);
+          setSupplierAddressPickerError(
+            error?.message ?? 'Unable to search addresses right now.',
+          );
+        })
+        .finally(() => {
+          if (supplierAddressSearchRequestIdRef.current === requestId) {
+            setSearchingSupplierAddresses(false);
+          }
+        });
+    }, 320);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [isSupplierAddressPickerVisible, supplierAddressSearchQuery]);
 
   useEffect(() => {
     const pendingOtp = pendingAutoLoginOtpRef.current;
@@ -772,7 +1146,116 @@ export function AuthScreen({
   const shouldShowRegisterError = (field: RegisterField) =>
     Boolean(didAttemptRegister || registerTouched[field]);
 
+  const clearScheduledOtpAutofill = (target: 'login' | 'forgot') => {
+    const timeoutRef =
+      target === 'login' ? loginOtpAutofillTimeoutRef : forgotOtpAutofillTimeoutRef;
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const scheduleOtpAutofill = (
+    target: 'login' | 'forgot',
+    phone: string,
+    nextOtp: string,
+  ) => {
+    clearScheduledOtpAutofill(target);
+
+    const applyOtp = () => {
+      if (target === 'login') {
+        lastLoginOtpRef.current[phone] = nextOtp;
+        pendingAutoLoginOtpRef.current = { phone, otp: nextOtp };
+        setOtp(currentOtp => currentOtp || nextOtp);
+        loginOtpAutofillTimeoutRef.current = null;
+        return;
+      }
+
+      lastForgotPasswordOtpRef.current[phone] = nextOtp;
+      pendingAutoForgotOtpRef.current = { phone, otp: nextOtp };
+      setForgotPasswordOtp(currentOtp => currentOtp || nextOtp);
+      forgotOtpAutofillTimeoutRef.current = null;
+    };
+
+    const timeoutId = setTimeout(applyOtp, OTP_AUTOFILL_DELAY_MS);
+
+    if (target === 'login') {
+      loginOtpAutofillTimeoutRef.current = timeoutId;
+      return;
+    }
+
+    forgotOtpAutofillTimeoutRef.current = timeoutId;
+  };
+
+  const syncSupplierAddressForLocation = async (location: LocationValue) => {
+    const requestId = ++supplierAddressReverseRequestIdRef.current;
+    setResolvingSupplierAddress(true);
+    setSupplierAddressPickerError('');
+
+    try {
+      const nextAddress = await reverseGeocodeSupplierLocation(location);
+      if (supplierAddressReverseRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setSupplierAddressMapSelectionDetails(nextAddress);
+      skipNextSupplierAddressSearchRef.current = true;
+      setSupplierAddressSearchQuery(nextAddress.displayName);
+      setSupplierAddressSearchResults([]);
+    } catch (error: any) {
+      if (supplierAddressReverseRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setSupplierAddressPickerError(
+        error?.message ?? 'Unable to fetch the selected address.',
+      );
+    } finally {
+      if (supplierAddressReverseRequestIdRef.current === requestId) {
+        setResolvingSupplierAddress(false);
+      }
+    }
+  };
+
+  const applySupplierAddressSelection = (
+    location: LocationValue | null,
+    details: SupplierResolvedAddress | null,
+  ) => {
+    setSupplierAddressLocation(location);
+    setSupplierAddressDisplay(details?.displayName ?? '');
+    setSupplierAddressLine1(details?.addressLine1 ?? '');
+    setSupplierAddressLine2(details?.addressLine2 ?? '');
+    setSupplierCity(details?.city ?? '');
+    setSupplierPostalCode(details?.postalCode ?? '');
+    setSupplierState(details?.state ?? '');
+  };
+
+  const handleSupplierAddressMapPress = (event: MapPressEvent) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    const nextLocation = {
+      lat: latitude.toFixed(6),
+      lng: longitude.toFixed(6),
+    };
+    setSupplierAddressMapSelection(nextLocation);
+    syncSupplierAddressForLocation(nextLocation);
+  };
+
+  const handleSupplierAddressMarkerDragEnd = (
+    event: MarkerDragStartEndEvent,
+  ) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    const nextLocation = {
+      lat: latitude.toFixed(6),
+      lng: longitude.toFixed(6),
+    };
+    setSupplierAddressMapSelection(nextLocation);
+    syncSupplierAddressForLocation(nextLocation);
+  };
+
   const resetSupplierForm = () => {
+    clearScheduledOtpAutofill('login');
+    clearScheduledOtpAutofill('forgot');
     setSupplierCountry(DEFAULT_COUNTRY);
     setSupplierName('');
     setSupplierPhone('');
@@ -786,6 +1269,16 @@ export function AuthScreen({
     setSupplierCity('');
     setSupplierPostalCode('');
     setSupplierState('');
+    setSupplierAddressPickerVisible(false);
+    setSupplierAddressLocation(null);
+    setSupplierAddressDisplay('');
+    setSupplierAddressMapSelection(null);
+    setSupplierAddressMapSelectionDetails(null);
+    setSupplierAddressSearchQuery('');
+    setSupplierAddressSearchResults([]);
+    setSearchingSupplierAddresses(false);
+    setResolvingSupplierAddress(false);
+    setSupplierAddressPickerError('');
     setRegisterTouched({});
     setDidAttemptRegister(false);
   };
@@ -795,6 +1288,7 @@ export function AuthScreen({
   };
 
   const resetForgotPasswordForm = () => {
+    clearScheduledOtpAutofill('forgot');
     setForgotPasswordPhone('');
     setForgotPasswordOtp('');
     setForgotPasswordPassword('');
@@ -852,17 +1346,8 @@ export function AuthScreen({
   ) => {
     const extractedOtp = extractOtpFromResponse(response);
     if (extractedOtp) {
-      if (target === 'login') {
-        lastLoginOtpRef.current[phone] = extractedOtp;
-        pendingAutoLoginOtpRef.current = { phone, otp: extractedOtp };
-        setOtp(extractedOtp);
-      }
-
-      if (target === 'forgot') {
-        lastForgotPasswordOtpRef.current[phone] = extractedOtp;
-        pendingAutoForgotOtpRef.current = { phone, otp: extractedOtp };
-        setForgotPasswordOtp(extractedOtp);
-      }
+      // Delay the write slightly so the OTP screen has time to render before autofill runs.
+      scheduleOtpAutofill(target, phone, extractedOtp);
     }
 
     return extractedOtp;
@@ -871,6 +1356,7 @@ export function AuthScreen({
   const handleLoginPhoneChange = (value: string) => {
     const nextPhone = value.replace(/\D/g, '');
     if (nextPhone !== loginPhone) {
+      clearScheduledOtpAutofill('login');
       setOtp('');
       setOtpRequested(false);
       setLoginOtpCooldownSeconds(0);
@@ -883,6 +1369,7 @@ export function AuthScreen({
   const handleForgotPasswordPhoneChange = (value: string) => {
     const nextPhone = value.replace(/\D/g, '');
     if (nextPhone !== forgotPasswordPhone) {
+      clearScheduledOtpAutofill('forgot');
       setForgotPasswordOtp('');
       setForgotPasswordOtpRequested(false);
       setForgotOtpCooldownSeconds(0);
@@ -933,6 +1420,7 @@ export function AuthScreen({
     setSubmitAction('login-request-otp');
     try {
       delete lastLoginOtpRef.current[formattedLoginPhone];
+      clearScheduledOtpAutofill('login');
       pendingAutoLoginOtpRef.current = null;
       setOtp('');
 
@@ -1108,6 +1596,7 @@ export function AuthScreen({
     setSubmitAction('forgot-request-otp');
     try {
       delete lastForgotPasswordOtpRef.current[formattedForgotPasswordPhone];
+      clearScheduledOtpAutofill('forgot');
       pendingAutoForgotOtpRef.current = null;
       setForgotPasswordOtp('');
 
@@ -1259,22 +1748,16 @@ export function AuthScreen({
         style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
       >
         <StatusBar barStyle={theme.statusBarStyle} />
-        <View pointerEvents="none" style={styles.backgroundDecor}>
-          <View
-            style={[
-              styles.decorBubble,
-              styles.decorTop,
-              { backgroundColor: palette.decorTop },
-            ]}
-          />
-          <View
-            style={[
-              styles.decorBubble,
-              styles.decorBottom,
-              { backgroundColor: palette.decorBottom },
-            ]}
-          />
-        </View>
+        <AuthWaterBackdrop
+          screenColor={palette.screenBackground}
+          glowTop={palette.decorTop}
+          glowBottom={palette.decorBottom}
+          frostTint={palette.glassFrost}
+          mistTint={palette.glassMist}
+          dropletFill={palette.dropletFill}
+          dropletEdge={palette.dropletEdge}
+          dropletHighlight={palette.dropletHighlight}
+        />
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
@@ -1507,6 +1990,7 @@ export function AuthScreen({
                     ) : null}
                     {otpRequested ? (
                       <>
+                        {/* Temporary fallback: surface the OTP from the API response until autofill is fully stable. */}
                         {surfacedLoginOtp ? (
                           <View
                             style={[
@@ -1520,7 +2004,7 @@ export function AuthScreen({
                             <AppText
                               style={[styles.temporaryOtpLabel, { color: palette.subtleText }]}
                             >
-                              Temporary OTP for testing
+                              Temporary OTP from API response
                             </AppText>
                             <AppText
                               style={[styles.temporaryOtpValue, { color: palette.accentStrong }]}
@@ -1540,9 +2024,9 @@ export function AuthScreen({
                           shouldShowLoginError('otp'),
                           loginErrors.otp,
                         )}
-                        <AppText style={[styles.helperText, { color: palette.subtleText }]}>
+                        {/* <AppText style={[styles.helperText, { color: palette.subtleText }]}>
                           {t('otpSentHelperText')}
-                        </AppText>
+                        </AppText> */}
                         <AppButton
                           title={
                             loginOtpCooldownSeconds > 0
@@ -1627,6 +2111,16 @@ export function AuthScreen({
           style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
         >
           <StatusBar barStyle={theme.statusBarStyle} />
+          <AuthWaterBackdrop
+            screenColor={palette.screenBackground}
+            glowTop={palette.decorTop}
+            glowBottom={palette.decorBottom}
+            frostTint={palette.glassFrost}
+            mistTint={palette.glassMist}
+            dropletFill={palette.dropletFill}
+            dropletEdge={palette.dropletEdge}
+            dropletHighlight={palette.dropletHighlight}
+          />
           <ScrollView
             contentContainerStyle={[
               styles.registrationContainer,
@@ -1647,7 +2141,7 @@ export function AuthScreen({
             >
               <Image source={APP_LOGO} style={styles.registrationLogo} resizeMode="contain" />
               <View style={styles.registrationHeaderCopy}>
-                <View
+                {/* <View
                   style={[
                     styles.modalBadge,
                     {
@@ -1659,7 +2153,7 @@ export function AuthScreen({
                   <AppText style={[styles.modalBadgeText, { color: palette.accentStrong }]}>
                     APPLICATION
                   </AppText>
-                </View>
+                </View> */}
                 <AppText
                   i18nKey="supplierRegistrationTitle"
                   style={[styles.registrationTitle, { color: palette.heading }]}
@@ -1878,6 +2372,58 @@ export function AuthScreen({
                   'A complete and accurate address helps speed up supplier approval and operations setup later.',
                 )} */}
 
+                <View
+                  style={[
+                    styles.locationSummaryCard,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                >
+                  <View style={styles.locationSummaryHeader}>
+                    <AppText style={[styles.locationSummaryLabel, { color: palette.subtleText }]}>
+                      Business address picker
+                    </AppText>
+                    <AppText
+                      style={[styles.locationOptionalLabel, { color: palette.accentStrong }]}
+                    >
+                      Auto-fill
+                    </AppText>
+                  </View>
+                  <AppText style={[styles.locationSummaryValue, { color: palette.heading }]}>
+                    {supplierAddressSummary || 'Search and pin your business address'}
+                  </AppText>
+                  {supplierAddressDisplay ? (
+                    <AppText style={[styles.locationAddressValue, { color: palette.subtleText }]}>
+                      {supplierAddressDisplay}
+                    </AppText>
+                  ) : null}
+                  {supplierAddressLocation ? (
+                    <AppText style={[styles.locationSummaryHint, { color: palette.subtleText }]}>
+                      {formatLocationValue(supplierAddressLocation)}
+                    </AppText>
+                  ) : (
+                    <AppText style={[styles.locationSummaryHint, { color: palette.subtleText }]}>
+                      Search an address or drop the marker on the map to fill the fields below.
+                    </AppText>
+                  )}
+                </View>
+
+                <AppButton
+                  title="Pick business address"
+                  onPress={() => setSupplierAddressPickerVisible(true)}
+                  disabled={isBusy}
+                  style={[
+                    styles.locationActionButton,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                  textStyle={{ color: palette.accentStrong }}
+                />
+
                 {renderFieldLabel('Address line 1')}
                 <AppInput
                   placeholder={t('addressLine1Placeholder')}
@@ -1975,6 +2521,17 @@ export function AuthScreen({
                   shouldShowRegisterError('state'),
                   registerErrors.state,
                 )}
+
+                {(supplierAddressLocation || supplierAddressSummary) && (
+                  <AppButton
+                    title="Edit picked address"
+                    onPress={() => setSupplierAddressPickerVisible(true)}
+                    disabled={isBusy}
+                    variant="ghost"
+                    style={styles.locationUtilityButton}
+                    textStyle={{ color: palette.accentStrong }}
+                  />
+                )}
               </View>
 
               <AppButton
@@ -1998,6 +2555,209 @@ export function AuthScreen({
       </Modal>
 
       <Modal
+        visible={isSupplierAddressPickerVisible}
+        animationType="slide"
+        onRequestClose={() => setSupplierAddressPickerVisible(false)}
+      >
+        <SafeAreaView
+          edges={['left', 'right', 'bottom']}
+          style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
+        >
+          <StatusBar barStyle={theme.statusBarStyle} />
+          <AuthWaterBackdrop
+            screenColor={palette.screenBackground}
+            glowTop={palette.decorTop}
+            glowBottom={palette.decorBottom}
+            frostTint={palette.glassFrost}
+            mistTint={palette.glassMist}
+            dropletFill={palette.dropletFill}
+            dropletEdge={palette.dropletEdge}
+            dropletHighlight={palette.dropletHighlight}
+          />
+          <View style={styles.mapPickerScreen}>
+            <AppBackButton
+              onPress={() => setSupplierAddressPickerVisible(false)}
+              style={styles.mapPickerBackButton}
+            />
+            <AppText style={[styles.mapPickerTitle, { color: palette.heading }]}>
+              Pick business address
+            </AppText>
+            <AppText style={[styles.mapPickerSubtitle, { color: palette.subtleText }]}>
+              Search for the address or move the pin on the map. We will fill the business
+              address fields automatically.
+            </AppText>
+
+            <View
+              style={[
+                styles.mapSearchCard,
+                {
+                  backgroundColor: palette.surface,
+                  borderColor: palette.surfaceBorder,
+                },
+              ]}
+            >
+              <AppText style={[styles.locationSummaryLabel, { color: palette.subtleText }]}>
+                Search address
+              </AppText>
+              <AppInput
+                value={supplierAddressSearchQuery}
+                onChangeText={setSupplierAddressSearchQuery}
+                placeholder="Search business area, street, or landmark"
+                editable={!isBusy}
+              />
+              {isSearchingSupplierAddresses ? (
+                <View style={styles.searchLoadingRow}>
+                  <AppWaterLoader size={18} />
+                  <AppText style={[styles.searchLoadingText, { color: palette.subtleText }]}>
+                    Searching addresses...
+                  </AppText>
+                </View>
+              ) : null}
+              {supplierAddressSearchResults.length ? (
+                <View
+                  style={[
+                    styles.searchResultsCard,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                >
+                  {supplierAddressSearchResults.map(result => (
+                    <Pressable
+                      key={result.id}
+                      onPress={() => {
+                        setSupplierAddressMapSelection(result);
+                        setSupplierAddressMapSelectionDetails(result);
+                        skipNextSupplierAddressSearchRef.current = true;
+                        setSupplierAddressSearchQuery(result.displayName);
+                        setSupplierAddressSearchResults([]);
+                        setSupplierAddressPickerError('');
+                        supplierAddressMapRef.current?.animateToRegion(
+                          getMapRegion(result),
+                          260,
+                        );
+                      }}
+                      style={({ pressed }) => [
+                        styles.searchResultRow,
+                        {
+                          borderBottomColor: palette.accentSoftBorder,
+                          backgroundColor: pressed ? palette.surface : 'transparent',
+                        },
+                      ]}
+                    >
+                      <AppText style={[styles.searchResultTitle, { color: palette.heading }]}>
+                        {result.title}
+                      </AppText>
+                      <AppText
+                        style={[styles.searchResultSubtitle, { color: palette.subtleText }]}
+                      >
+                        {result.subtitle}
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            <View
+              style={[
+                styles.mapCard,
+                {
+                  backgroundColor: palette.surface,
+                  borderColor: palette.surfaceBorder,
+                  shadowColor: palette.shadow,
+                },
+              ]}
+            >
+              <MapView
+                ref={ref => {
+                  supplierAddressMapRef.current = ref;
+                }}
+                initialRegion={getMapRegion(supplierAddressLocation)}
+                onPress={handleSupplierAddressMapPress}
+                style={styles.map}
+              >
+                {supplierAddressMapSelection ? (
+                  <Marker
+                    coordinate={{
+                      latitude: Number(supplierAddressMapSelection.lat),
+                      longitude: Number(supplierAddressMapSelection.lng),
+                    }}
+                    draggable
+                    onDragEnd={handleSupplierAddressMarkerDragEnd}
+                  />
+                ) : null}
+              </MapView>
+            </View>
+
+            <View
+              style={[
+                styles.mapSelectionCard,
+                {
+                  backgroundColor: palette.surface,
+                  borderColor: palette.surfaceBorder,
+                },
+              ]}
+            >
+              <AppText style={[styles.locationSummaryLabel, { color: palette.subtleText }]}>
+                Selected address
+              </AppText>
+              <AppText style={[styles.mapSelectionValue, { color: palette.heading }]}>
+                {supplierAddressMapSelectionDetails?.displayName ||
+                  'Tap the map or choose a search result to continue.'}
+              </AppText>
+              {supplierAddressMapSelection ? (
+                <AppText
+                  style={[styles.mapSelectionCoordinates, { color: palette.subtleText }]}
+                >
+                  {formatLocationValue(supplierAddressMapSelection)}
+                </AppText>
+              ) : null}
+            </View>
+
+            {supplierAddressPickerError ? (
+              <AppText style={[styles.validationText, { color: palette.error }]}>
+                {supplierAddressPickerError}
+              </AppText>
+            ) : null}
+            {isResolvingSupplierAddress ? (
+              <View style={styles.searchLoadingRow}>
+                <AppWaterLoader size={18} />
+                <AppText style={[styles.searchLoadingText, { color: palette.subtleText }]}>
+                  Resolving selected address...
+                </AppText>
+              </View>
+            ) : null}
+
+            <AppButton
+              title="Use this address"
+              onPress={() => {
+                applySupplierAddressSelection(
+                  supplierAddressMapSelection,
+                  supplierAddressMapSelectionDetails,
+                );
+                setSupplierAddressPickerVisible(false);
+              }}
+              disabled={
+                !supplierAddressMapSelection ||
+                !supplierAddressMapSelectionDetails ||
+                isBusy
+              }
+              style={[
+                styles.primaryButton,
+                {
+                  backgroundColor: palette.accent,
+                  borderColor: palette.accent,
+                },
+              ]}
+              textStyle={{ color: palette.accentTextOnFill }}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
         visible={showForgotPassword}
         animationType="slide"
         onRequestClose={closeForgotPassword}
@@ -2008,6 +2768,16 @@ export function AuthScreen({
           style={[styles.safeArea, { backgroundColor: palette.screenBackground }]}
         >
           <StatusBar barStyle={theme.statusBarStyle} />
+          <AuthWaterBackdrop
+            screenColor={palette.screenBackground}
+            glowTop={palette.decorTop}
+            glowBottom={palette.decorBottom}
+            frostTint={palette.glassFrost}
+            mistTint={palette.glassMist}
+            dropletFill={palette.dropletFill}
+            dropletEdge={palette.dropletEdge}
+            dropletHighlight={palette.dropletHighlight}
+          />
           <ScrollView
             contentContainerStyle={[
               styles.registrationContainer,
@@ -2029,7 +2799,7 @@ export function AuthScreen({
             >
               <Image source={APP_LOGO} style={styles.registrationLogo} resizeMode="contain" />
               <View style={styles.registrationHeaderCopy}>
-                <View
+                {/* <View
                   style={[
                     styles.modalBadge,
                     {
@@ -2041,7 +2811,7 @@ export function AuthScreen({
                   <AppText style={[styles.modalBadgeText, { color: palette.accentStrong }]}>
                     RECOVERY
                   </AppText>
-                </View>
+                </View> */}
                 <AppText
                   i18nKey={showResetPassword ? 'resetPasswordTitle' : 'forgotPasswordTitle'}
                   style={[styles.registrationTitle, { color: palette.heading }]}
@@ -2169,6 +2939,7 @@ export function AuthScreen({
                       Enter the latest OTP below to continue with your password reset.
                     </AppText>
                   </View>
+                  {/* Temporary fallback: surface the OTP from the API response until autofill is fully stable. */}
                   {surfacedForgotPasswordOtp ? (
                     <View
                       style={[
@@ -2182,7 +2953,7 @@ export function AuthScreen({
                       <AppText
                         style={[styles.temporaryOtpLabel, { color: palette.subtleText }]}
                       >
-                        Temporary OTP for testing
+                        Temporary OTP from API response
                       </AppText>
                       <AppText
                         style={[styles.temporaryOtpValue, { color: palette.accentStrong }]}
@@ -2205,9 +2976,9 @@ export function AuthScreen({
                     shouldShowForgotPasswordError('otp'),
                     forgotPasswordErrors.otp,
                   )}
-                  <AppText style={[styles.helperText, { color: palette.subtleText }]}> 
+                  {/* <AppText style={[styles.helperText, { color: palette.subtleText }]}> 
                     {t('forgotPasswordOtpHelper')}
-                  </AppText>
+                  </AppText> */}
                   <AppButton
                     title="Continue to reset"
                     onPress={handleForgotPasswordVerify}
@@ -2314,30 +3085,6 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 24,
     flexGrow: 1,
-  },
-  backgroundDecor: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    overflow: 'hidden',
-  },
-  decorBubble: {
-    position: 'absolute',
-    borderRadius: 999,
-  },
-  decorTop: {
-    width: 240,
-    height: 240,
-    top: -72,
-    right: -88,
-  },
-  decorBottom: {
-    width: 180,
-    height: 180,
-    bottom: 140,
-    left: -72,
   },
   headerSection: {
     alignItems: 'center',
@@ -2653,6 +3400,141 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     alignSelf: 'flex-start',
     marginTop: 6,
+  },
+  locationSummaryCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    gap: 6,
+    marginBottom: 12,
+  },
+  locationSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  locationSummaryLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  locationOptionalLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  locationSummaryValue: {
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  locationAddressValue: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  locationSummaryHint: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  locationActionButton: {
+    borderWidth: 1,
+    borderRadius: 18,
+    marginBottom: 12,
+  },
+  locationUtilityButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 0,
+    minHeight: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    marginTop: 4,
+  },
+  mapPickerScreen: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 24,
+  },
+  mapPickerBackButton: {
+    marginBottom: 14,
+    alignSelf: 'flex-start',
+  },
+  mapPickerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  mapPickerSubtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  mapSearchCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    gap: 10,
+    marginBottom: 14,
+  },
+  searchLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchLoadingText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  searchResultsCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  searchResultRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  searchResultTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  searchResultSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  mapCard: {
+    borderWidth: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 14,
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    elevation: 4,
+  },
+  map: {
+    width: '100%',
+    height: 280,
+  },
+  mapSelectionCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    gap: 6,
+    marginBottom: 10,
+  },
+  mapSelectionValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 21,
+  },
+  mapSelectionCoordinates: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   stepRow: {
     flexDirection: 'row',

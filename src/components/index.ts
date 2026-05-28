@@ -11,3 +11,4 @@ export * from './AppFieldMessage';
 export * from './AppSnackbar';
 export * from './AppRefreshScrollView';
 export * from './AppWaterLoader';
+export * from './AuthWaterBackdrop';
