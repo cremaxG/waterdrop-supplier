@@ -249,10 +249,25 @@ function normalizeProduct(item: any, vehicles: VehicleRecord[] = []): ProductRec
 
   return {
     id: String(item.id ?? item.sku ?? `product-${Date.now()}`),
+    supplierId: item.supplier_id ? String(item.supplier_id) : undefined,
     name: item.name ?? item.title ?? 'Untitled product',
     sku: item.sku ?? item.code ?? '',
+    price: item.price != null ? String(item.price) : undefined,
+    taxCode: item.tax_code ?? item.taxCode ?? undefined,
+    discount: item.discount != null ? String(item.discount) : undefined,
+    includingGst:
+      typeof item.including_gst === 'boolean'
+        ? item.including_gst
+        : typeof item.includingGst === 'boolean'
+          ? item.includingGst
+          : undefined,
+    brand: item.brand ?? undefined,
     category: item.category ?? '',
+    type: item.type ?? '',
+    status: item.status ?? undefined,
     unitLabel: item.uom ?? item.unitLabel ?? '',
+    createdAt: item.created_at ?? item.createdAt ?? undefined,
+    updatedAt: item.updated_at ?? item.updatedAt ?? undefined,
     totalStock,
     godownInventory: stockQty,
     demand: parseDemand(item.demand ?? item.demand_value ?? item.demandValue),
@@ -297,9 +312,9 @@ export function OperationsProvider({
   const loadProducts = async () => {
     const profileResponse = await SupplierApi.getSupplierProfile();
     const supplierId = extractSupplierId(profileResponse);
-    const productResponse = await ProductApi.listProducts(
-      supplierId ? { supplierId } : undefined,
-    );
+    const productResponse = supplierId
+      ? await ProductApi.listSupplierProducts(supplierId)
+      : await ProductApi.listProducts();
     return extractCollection(productResponse, 'products');
   };
 

@@ -345,11 +345,18 @@ export function ProductsScreen({
     setSubmittingProduct(true);
 
     try {
+      const supplierResponse = await SupplierApi.getSupplierProfile();
+      const supplier = unwrapSupplierProfile(supplierResponse) as { id?: number } | null;
+      if (!supplier?.id) {
+        throw new Error('Unable to load supplier profile.');
+      }
+
       const numericProductId = Number(editingProductId);
       const requestProductId = Number.isFinite(numericProductId)
         ? numericProductId
         : editingProductId;
       const payload = {
+        supplier_id: supplier.id,
         name: draft.name.trim(),
         price: draft.price.trim(),
         uom: draft.unitLabel.trim(),

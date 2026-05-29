@@ -38,6 +38,13 @@ export default class ProductApi {
     return BaseApi.get('/products', {}, { params });
   }
 
+  static listSupplierProducts(
+    supplierId: number | string,
+    params?: Record<string, any>,
+  ) {
+    return BaseApi.get(`/products/supplier/${supplierId}`, {}, { params });
+  }
+
   static createProduct(payload: CreateProductPayload) {
     return BaseApi.post('/products', payload);
   }
@@ -46,7 +53,7 @@ export default class ProductApi {
     return BaseApi.get(`/products/${productId}`);
   }
 
-  static updateProduct(productId: number | string, payload: Partial<CreateProductPayload>) {
+  static updateProduct(productId: number | string, payload: CreateProductPayload) {
     return BaseApi.put(`/products/${productId}`, payload);
   }
 
