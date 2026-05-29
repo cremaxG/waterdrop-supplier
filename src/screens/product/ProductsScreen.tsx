@@ -11,6 +11,7 @@ import {
   AppButton,
   AppIcon,
   AppRefreshScrollView,
+  AppSheet,
   AppSnackbar,
   AppText,
 } from '../../components';
@@ -61,6 +62,16 @@ function extractApiErrorMessage(response: any) {
   );
 }
 
+function hasApiFailure(response: any) {
+  return Boolean(
+    !response ||
+      response.success === false ||
+      response.error ||
+      (typeof response.status === 'number' && response.status >= 400) ||
+      (typeof response.statusCode === 'number' && response.statusCode >= 400),
+  );
+}
+
 function getProductVehicleUnits(product: ProductRecord) {
   const explicitVehicleUnits = product.vehicleInventory.reduce(
     (sum, item) => sum + item.quantity,
@@ -90,23 +101,30 @@ export function ProductsScreen({
   } = useOperations();
   const { width } = useWindowDimensions();
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [isAddProductVisible, setAddProductVisible] = useState(false);
-  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [isProductFormVisible, setProductFormVisible] = useState(false);
+  const [isSubmittingProduct, setSubmittingProduct] = useState(false);
   const [productSubmissionError, setProductSubmissionError] = useState<string | null>(
     null,
   );
+  const [isProductActionsVisible, setProductActionsVisible] = useState(false);
+  const [isDeleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [isSnackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarTone, setSnackbarTone] = useState<'success' | 'error' | 'info'>(
     'info',
   );
   const detailTranslateX = useRef(new Animated.Value(width)).current;
-  const addTranslateX = useRef(new Animated.Value(width)).current;
+  const formTranslateX = useRef(new Animated.Value(width)).current;
   const lastHandledExternalAddTokenRef = useRef<number | null>(null);
 
   const selectedProduct = useMemo(
     () => products.find(product => product.id === selectedProductId) ?? null,
     [products, selectedProductId],
+  );
+  const editingProduct = useMemo(
+    () => products.find(product => product.id === editingProductId) ?? null,
+    [editingProductId, products],
   );
 
   const productSummary = useMemo(() => {
@@ -135,10 +153,10 @@ export function ProductsScreen({
       detailTranslateX.setValue(width);
     }
 
-    if (!isAddProductVisible) {
-      addTranslateX.setValue(width);
+    if (!isProductFormVisible) {
+      formTranslateX.setValue(width);
     }
-  }, [addTranslateX, detailTranslateX, isAddProductVisible, selectedProductId, width]);
+  }, [detailTranslateX, formTranslateX, isProductFormVisible, selectedProductId, width]);
 
   useEffect(() => {
     if (
@@ -149,20 +167,24 @@ export function ProductsScreen({
     }
 
     lastHandledExternalAddTokenRef.current = externalAddRequestToken;
+    formTranslateX.setValue(width);
     setSelectedProductId(null);
-    addTranslateX.setValue(width);
-    setAddProductVisible(true);
+    setEditingProductId(null);
+    setProductSubmissionError(null);
+    setProductActionsVisible(false);
+    setDeleteConfirmVisible(false);
+    setProductFormVisible(true);
     onDetailVisibilityChange?.(true);
 
     requestAnimationFrame(() => {
-      Animated.timing(addTranslateX, {
+      Animated.timing(formTranslateX, {
         toValue: 0,
         duration: 250,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
     });
-  }, [addTranslateX, externalAddRequestToken, onDetailVisibilityChange, width]);
+  }, [externalAddRequestToken, formTranslateX, onDetailVisibilityChange, width]);
 
   const openProductDetails = (productId: string) => {
     detailTranslateX.setValue(width);
@@ -195,14 +217,17 @@ export function ProductsScreen({
     });
   };
 
-  const openAddProduct = () => {
-    addTranslateX.setValue(width);
+  const openProductForm = (productId: string | null) => {
+    formTranslateX.setValue(width);
+    setEditingProductId(productId);
     setProductSubmissionError(null);
-    setAddProductVisible(true);
+    setProductActionsVisible(false);
+    setDeleteConfirmVisible(false);
+    setProductFormVisible(true);
     onDetailVisibilityChange?.(true);
 
     requestAnimationFrame(() => {
-      Animated.timing(addTranslateX, {
+      Animated.timing(formTranslateX, {
         toValue: 0,
         duration: 250,
         easing: Easing.out(Easing.cubic),
@@ -211,8 +236,8 @@ export function ProductsScreen({
     });
   };
 
-  const closeAddProduct = () => {
-    Animated.timing(addTranslateX, {
+  const closeProductForm = (onClosed?: () => void) => {
+    Animated.timing(formTranslateX, {
       toValue: width,
       duration: 210,
       easing: Easing.in(Easing.cubic),
@@ -222,15 +247,21 @@ export function ProductsScreen({
         return;
       }
 
-      setAddProductVisible(false);
+      setProductFormVisible(false);
       setProductSubmissionError(null);
+      setProductActionsVisible(false);
+      setDeleteConfirmVisible(false);
+      setEditingProductId(null);
       onDetailVisibilityChange?.(false);
+      if (onClosed) {
+        onClosed();
+      }
     });
   };
 
-  const handleAddProduct = async (draft: NewProductDraft) => {
+  const handleCreateProduct = async (draft: NewProductDraft) => {
     setProductSubmissionError(null);
-    setIsCreatingProduct(true);
+    setSubmittingProduct(true);
 
     try {
       const supplierResponse = await SupplierApi.getSupplierProfile();
@@ -267,6 +298,8 @@ export function ProductsScreen({
         name: response.name ?? draft.name.trim(),
         sku: draft.sku.trim(),
         category: response.category ?? draft.category.trim(),
+        type: response.type ?? draft.type.trim(),
+        price: String(response.price ?? draft.price.trim()),
         unitLabel: response.uom ?? draft.unitLabel.trim(),
         totalStock: Number(response.stock_qty ?? draft.godownInventory) || 0,
         godownInventory: Number(response.stock_qty ?? draft.godownInventory) || 0,
@@ -284,22 +317,119 @@ export function ProductsScreen({
         addProduct(nextProduct);
       }
 
-      closeAddProduct();
-      setSnackbarMessage(response.message ?? 'Product created successfully.');
-      setSnackbarTone('success');
-      setSnackbarVisible(true);
+      closeProductForm(() => {
+        setSnackbarMessage(response.message ?? 'Product created successfully.');
+        setSnackbarTone('success');
+        setSnackbarVisible(true);
+      });
     } catch (error: any) {
       const nextMessage =
         extractApiErrorMessage(error) ??
         error?.message ??
         'Unable to create product. Please try again.';
       setProductSubmissionError(nextMessage);
-      console.error('Create product failed', error);
       setSnackbarMessage(nextMessage);
       setSnackbarTone('error');
       setSnackbarVisible(true);
     } finally {
-      setIsCreatingProduct(false);
+      setSubmittingProduct(false);
+    }
+  };
+
+  const handleUpdateProduct = async (draft: NewProductDraft) => {
+    if (!editingProductId) {
+      return;
+    }
+
+    setProductSubmissionError(null);
+    setSubmittingProduct(true);
+
+    try {
+      const numericProductId = Number(editingProductId);
+      const requestProductId = Number.isFinite(numericProductId)
+        ? numericProductId
+        : editingProductId;
+      const payload = {
+        name: draft.name.trim(),
+        price: draft.price.trim(),
+        uom: draft.unitLabel.trim(),
+        stock_qty: Number(draft.godownInventory) || 0,
+        category: draft.category.trim(),
+        type: draft.type.trim(),
+        description: draft.description.trim(),
+      };
+
+      const response = await ProductApi.updateProduct(requestProductId, payload);
+      if (hasApiFailure(response)) {
+        throw new Error(
+          extractApiErrorMessage(response) ?? 'Unable to update product.',
+        );
+      }
+
+      await refreshProducts();
+
+      closeProductForm(() => {
+        setSnackbarMessage('Product updated successfully.');
+        setSnackbarTone('success');
+        setSnackbarVisible(true);
+      });
+    } catch (error: any) {
+      const nextMessage =
+        extractApiErrorMessage(error) ??
+        error?.message ??
+        'Unable to update product.';
+      setProductSubmissionError(nextMessage);
+      setSnackbarMessage(nextMessage);
+      setSnackbarTone('error');
+      setSnackbarVisible(true);
+    } finally {
+      setSubmittingProduct(false);
+    }
+  };
+
+  const handleSubmitProduct = async (draft: NewProductDraft) => {
+    if (editingProductId) {
+      await handleUpdateProduct(draft);
+      return;
+    }
+
+    await handleCreateProduct(draft);
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!editingProductId) {
+      return;
+    }
+
+    setSubmittingProduct(true);
+    try {
+      const numericProductId = Number(editingProductId);
+      const requestProductId = Number.isFinite(numericProductId)
+        ? numericProductId
+        : editingProductId;
+      const response = await ProductApi.deleteProduct(requestProductId);
+      if (hasApiFailure(response)) {
+        throw new Error(
+          extractApiErrorMessage(response) ?? 'Unable to delete product.',
+        );
+      }
+      await refreshProducts();
+      closeProductForm(() => {
+        setSnackbarMessage('Product deleted successfully.');
+        setSnackbarTone('success');
+        setSnackbarVisible(true);
+      });
+    } catch (error: any) {
+      const nextMessage =
+        extractApiErrorMessage(error) ??
+        error?.message ??
+        'Unable to delete product.';
+      setSnackbarMessage(nextMessage);
+      setSnackbarTone('error');
+      setSnackbarVisible(true);
+    } finally {
+      setSubmittingProduct(false);
+      setDeleteConfirmVisible(false);
     }
   };
 
@@ -334,233 +464,251 @@ export function ProductsScreen({
         extractApiErrorMessage(error) ??
         error?.message ??
         'Unable to update vehicle inventory. Please try again.';
-      console.error('Update vehicle product inventory failed', error);
       setSnackbarMessage(nextMessage);
       setSnackbarTone('error');
       setSnackbarVisible(true);
     }
   };
 
+  const editingInitialDraft = useMemo(
+    () =>
+      editingProduct
+        ? {
+            name: editingProduct.name,
+            sku: editingProduct.sku,
+            category: editingProduct.category,
+            type: editingProduct.type ?? '',
+            unitLabel: editingProduct.unitLabel,
+            price: editingProduct.price ? String(editingProduct.price) : '',
+            godownInventory: String(editingProduct.godownInventory),
+            demand: editingProduct.demand,
+            reorderLevel: String(editingProduct.reorderLevel),
+            description: editingProduct.description,
+          }
+        : null,
+    [editingProduct],
+  );
+
   return (
     <View style={styles.screenRoot}>
       <AppRefreshScrollView
-        refreshEnabled={!selectedProductId && !isAddProductVisible}
+        refreshEnabled={!selectedProductId && !isProductFormVisible}
         onRefresh={refreshProducts}
       >
         <View style={styles.listScreen}>
-        <View
-          style={[
-            styles.heroCard,
-            {
-              backgroundColor: palette.surface,
-              borderColor: palette.border,
-              shadowColor: palette.shadow,
-            },
-          ]}
-        >
-          <View pointerEvents="none" style={styles.heroDecor}>
-            <View
-              style={[
-                styles.heroBubble,
-                styles.heroBubbleTop,
-                { backgroundColor: palette.heroTop },
-              ]}
-            />
-            <View
-              style={[
-                styles.heroBubble,
-                styles.heroBubbleBottom,
-                { backgroundColor: palette.heroBottom },
-              ]}
-            />
-          </View>
-
-          <View style={styles.headerRow}>
-            <View style={styles.headerCopy}>
-              <View
-                style={[
-                  styles.heroBadge,
-                  {
-                    backgroundColor: palette.accentSoft,
-                    borderColor: palette.accentSoftBorder,
-                  },
-                ]}
-              >
-                <AppIcon name="products" size={18} color={palette.accentStrong} />
-                <AppText style={[styles.heroBadgeText, { color: palette.accentStrong }]}>
-                  {t('productsTab')}
-                </AppText>
-              </View>
-              <AppText style={[styles.sectionTitle, { color: palette.text }]}>
-                {t('productsHeading')}
-              </AppText>
-              <AppText style={[styles.sectionSubtitle, { color: palette.muted }]}>
-                {t('productsSubtitle')}
-              </AppText>
-            </View>
-            <AppButton
-              title={t('productAddButton')}
-              onPress={openAddProduct}
-              variant="primary"
-              style={styles.addButton}
-              textStyle={styles.addButtonText}
-            />
-          </View>
-
-          <View style={styles.summaryRow}>
-            {[
-              {
-                label: t('productsTab'),
-                value: String(productSummary.totalProducts),
-              },
-              {
-                label: t('dashboardLowStockTitle'),
-                value: String(productSummary.lowStockCount),
-              },
-              {
-                label: t('dashboardGodownLabel'),
-                value: String(productSummary.godownUnits),
-              },
-            ].map(item => (
-              <View
-                key={item.label}
-                style={[
-                  styles.summaryCard,
-                  {
-                    backgroundColor: palette.surfaceSoft,
-                    borderColor: palette.border,
-                  },
-                ]}
-              >
-                <AppText style={[styles.summaryValue, { color: palette.text }]}>
-                  {item.value}
-                </AppText>
-                <AppText style={[styles.summaryLabel, { color: palette.muted }]}>
-                  {item.label}
-                </AppText>
-              </View>
-            ))}
-          </View>
-
           <View
             style={[
-              styles.loadCard,
-              {
-                backgroundColor: palette.surfaceSoft,
-                borderColor: palette.border,
-              },
-            ]}
-          >
-            <AppText style={[styles.loadCardLabel, { color: palette.muted }]}>
-              {t('dashboardVehicleLoadLabel')}
-            </AppText>
-            <AppText style={[styles.loadCardValue, { color: palette.text }]}>
-              {productSummary.vehicleUnits}
-            </AppText>
-          </View>
-        </View>
-
-        {products.length === 0 ? (
-          <View
-            style={[
-              styles.emptyStateCard,
+              styles.heroCard,
               {
                 backgroundColor: palette.surface,
                 borderColor: palette.border,
+                shadowColor: palette.shadow,
               },
             ]}
           >
-            <AppText style={[styles.emptyStateTitle, { color: palette.text }]}>
-              {t('productsHeading')}
-            </AppText>
-            <AppText style={[styles.emptyStateBody, { color: palette.muted }]}>
-              {t('productsSubtitle')}
-            </AppText>
-            <AppButton
-              title={t('productAddButton')}
-              onPress={openAddProduct}
-              variant="primary"
-              style={styles.emptyStateButton}
-              textStyle={styles.addButtonText}
-            />
-          </View>
-        ) : (
-          products.map(product => (
-            <Pressable
-              key={product.id}
-              onPress={() => openProductDetails(product.id)}
-              style={[
-                styles.listCard,
-                {
-                  backgroundColor: palette.surface,
-                  borderColor: palette.border,
-                  shadowColor: palette.shadow,
-                },
-              ]}
-            >
-              <View style={styles.listCardHeader}>
-                <View>
-                  <AppText style={[styles.listCardTitle, { color: palette.text }]}>
-                    {product.name}
-                  </AppText>
-                  <AppText
-                    style={[styles.listCardStatus, { color: palette.accentStrong }]}
-                  >
-                    {t(product.trendKey)}
-                  </AppText>
-                </View>
+            <View pointerEvents="none" style={styles.heroDecor}>
+              <View
+                style={[
+                  styles.heroBubble,
+                  styles.heroBubbleTop,
+                  { backgroundColor: palette.heroTop },
+                ]}
+              />
+              <View
+                style={[
+                  styles.heroBubble,
+                  styles.heroBubbleBottom,
+                  { backgroundColor: palette.heroBottom },
+                ]}
+              />
+            </View>
+
+            <View style={styles.headerRow}>
+              <View style={styles.headerCopy}>
                 <View
                   style={[
-                    styles.iconBadgeSmall,
+                    styles.heroBadge,
                     {
                       backgroundColor: palette.accentSoft,
                       borderColor: palette.accentSoftBorder,
                     },
                   ]}
                 >
-                  <AppIcon name="package" size={18} color={palette.accentStrong} />
+                  <AppIcon name="products" size={18} color={palette.accentStrong} />
+                  <AppText style={[styles.heroBadgeText, { color: palette.accentStrong }]}>
+                    {t('productsTab')}
+                  </AppText>
                 </View>
+                <AppText style={[styles.sectionTitle, { color: palette.text }]}>
+                  {t('productsHeading')}
+                </AppText>
+                <AppText style={[styles.sectionSubtitle, { color: palette.muted }]}>
+                  {t('productsSubtitle')}
+                </AppText>
               </View>
+              <AppButton
+                title={t('productAddButton')}
+                onPress={() => openProductForm(null)}
+                variant="primary"
+                style={styles.addButton}
+                textStyle={styles.addButtonText}
+              />
+            </View>
 
-              <View style={styles.metaRow}>
-                <View style={styles.metaBlock}>
-                  <AppText style={[styles.metaLabel, { color: palette.muted }]}>
-                    {t('productStockLabel')}
+            <View style={styles.summaryRow}>
+              {[
+                {
+                  label: t('productsTab'),
+                  value: String(productSummary.totalProducts),
+                },
+                {
+                  label: t('dashboardLowStockTitle'),
+                  value: String(productSummary.lowStockCount),
+                },
+                {
+                  label: t('dashboardGodownLabel'),
+                  value: String(productSummary.godownUnits),
+                },
+              ].map(item => (
+                <View
+                  key={item.label}
+                  style={[
+                    styles.summaryCard,
+                    {
+                      backgroundColor: palette.surfaceSoft,
+                      borderColor: palette.border,
+                    },
+                  ]}
+                >
+                  <AppText style={[styles.summaryValue, { color: palette.text }]}>
+                    {item.value}
                   </AppText>
-                  <AppText style={[styles.metaValue, { color: palette.text }]}>
-                    {product.totalStock}
+                  <AppText style={[styles.summaryLabel, { color: palette.muted }]}>
+                    {item.label}
                   </AppText>
                 </View>
-                <View style={styles.metaBlock}>
-                  <AppText style={[styles.metaLabel, { color: palette.muted }]}>
-                    {t('productDemandLabel')}
-                  </AppText>
-                  <AppText style={[styles.metaValue, { color: palette.text }]}>
-                    {product.demand}
-                  </AppText>
-                </View>
-              </View>
+              ))}
+            </View>
 
-              <View
+            <View
+              style={[
+                styles.loadCard,
+                {
+                  backgroundColor: palette.surfaceSoft,
+                  borderColor: palette.border,
+                },
+              ]}
+            >
+              <AppText style={[styles.loadCardLabel, { color: palette.muted }]}>
+                {t('dashboardVehicleLoadLabel')}
+              </AppText>
+              <AppText style={[styles.loadCardValue, { color: palette.text }]}>
+                {productSummary.vehicleUnits}
+              </AppText>
+            </View>
+          </View>
+
+          {products.length === 0 ? (
+            <View
+              style={[
+                styles.emptyStateCard,
+                {
+                  backgroundColor: palette.surface,
+                  borderColor: palette.border,
+                },
+              ]}
+            >
+              <AppText style={[styles.emptyStateTitle, { color: palette.text }]}>
+                {t('productsHeading')}
+              </AppText>
+              <AppText style={[styles.emptyStateBody, { color: palette.muted }]}>
+                {t('productsSubtitle')}
+              </AppText>
+              <AppButton
+                title={t('productAddButton')}
+                onPress={() => openProductForm(null)}
+                variant="primary"
+                style={styles.emptyStateButton}
+                textStyle={styles.addButtonText}
+              />
+            </View>
+          ) : (
+            products.map(product => (
+              <Pressable
+                key={product.id}
+                onPress={() => openProductDetails(product.id)}
                 style={[
-                  styles.inventoryStrip,
+                  styles.listCard,
                   {
-                    backgroundColor: palette.surfaceSoft,
+                    backgroundColor: palette.surface,
                     borderColor: palette.border,
+                    shadowColor: palette.shadow,
                   },
                 ]}
               >
-                <AppText style={[styles.inventoryStripLabel, { color: palette.muted }]}>
-                  {t('productGodownShortLabel')}
-                </AppText>
-                <AppText style={[styles.inventoryStripValue, { color: palette.text }]}>
-                  {product.godownInventory} {product.unitLabel}
-                </AppText>
-                <AppIcon name="chevron" size={18} color={palette.accentStrong} />
-              </View>
-            </Pressable>
-          ))
-        )}
+                <View style={styles.listCardHeader}>
+                  <View>
+                    <AppText style={[styles.listCardTitle, { color: palette.text }]}>
+                      {product.name}
+                    </AppText>
+                    <AppText
+                      style={[styles.listCardStatus, { color: palette.accentStrong }]}
+                    >
+                      {t(product.trendKey)}
+                    </AppText>
+                  </View>
+                  <View
+                    style={[
+                      styles.iconBadgeSmall,
+                      {
+                        backgroundColor: palette.accentSoft,
+                        borderColor: palette.accentSoftBorder,
+                      },
+                    ]}
+                  >
+                    <AppIcon name="package" size={18} color={palette.accentStrong} />
+                  </View>
+                </View>
+
+                <View style={styles.metaRow}>
+                  <View style={styles.metaBlock}>
+                    <AppText style={[styles.metaLabel, { color: palette.muted }]}>
+                      {t('productStockLabel')}
+                    </AppText>
+                    <AppText style={[styles.metaValue, { color: palette.text }]}>
+                      {product.totalStock}
+                    </AppText>
+                  </View>
+                  <View style={styles.metaBlock}>
+                    <AppText style={[styles.metaLabel, { color: palette.muted }]}>
+                      {t('productDemandLabel')}
+                    </AppText>
+                    <AppText style={[styles.metaValue, { color: palette.text }]}>
+                      {product.demand}
+                    </AppText>
+                  </View>
+                </View>
+
+                <View
+                  style={[
+                    styles.inventoryStrip,
+                    {
+                      backgroundColor: palette.surfaceSoft,
+                      borderColor: palette.border,
+                    },
+                  ]}
+                >
+                  <AppText style={[styles.inventoryStripLabel, { color: palette.muted }]}>
+                    {t('productGodownShortLabel')}
+                  </AppText>
+                  <AppText style={[styles.inventoryStripValue, { color: palette.text }]}>
+                    {product.godownInventory} {product.unitLabel}
+                  </AppText>
+                  <AppIcon name="chevron" size={18} color={palette.accentStrong} />
+                </View>
+              </Pressable>
+            ))
+          )}
         </View>
       </AppRefreshScrollView>
 
@@ -577,30 +725,92 @@ export function ProductsScreen({
           <ProductDetailsScreen
             product={selectedProduct}
             onBack={closeProductDetails}
+            onEdit={() => openProductForm(selectedProduct.id)}
+            onOpenActionMenu={() => {
+              setEditingProductId(selectedProduct.id);
+              setProductActionsVisible(true);
+            }}
             onUpdateGodownInventory={updateGodownInventory}
             onUpdateVehicleInventory={updateVehicleInventory}
           />
         </Animated.View>
       ) : null}
 
-      {isAddProductVisible ? (
+      {isProductFormVisible ? (
         <Animated.View
           style={[
             styles.overlayScreen,
             {
               backgroundColor: palette.background,
-              transform: [{ translateX: addTranslateX }],
+              transform: [{ translateX: formTranslateX }],
             },
           ]}
         >
           <AddProductScreen
-            onBack={closeAddProduct}
-            onSubmit={handleAddProduct}
-            isSubmitting={isCreatingProduct}
+            mode={editingProduct ? 'edit' : 'create'}
+            onBack={() => closeProductForm()}
+            onSubmit={handleSubmitProduct}
+            isSubmitting={isSubmittingProduct}
             submitErrorMessage={productSubmissionError}
+            initialDraft={editingInitialDraft}
+            onOpenActionMenu={editingProduct ? () => setProductActionsVisible(true) : null}
           />
         </Animated.View>
       ) : null}
+
+      <AppSheet
+        visible={isProductActionsVisible}
+        title="Product actions"
+        subtitle="Manage this product directly from the detail or edit flow."
+        onClose={() => setProductActionsVisible(false)}
+      >
+        <AppButton
+          title="Edit product"
+          onPress={() => {
+            if (!editingProductId) {
+              return;
+            }
+            setProductActionsVisible(false);
+            openProductForm(editingProductId);
+          }}
+          style={styles.sheetActionButton}
+          textStyle={styles.sheetActionText}
+        />
+        <AppButton
+          title="Delete product"
+          variant="danger"
+          onPress={() => {
+            setProductActionsVisible(false);
+            setDeleteConfirmVisible(true);
+          }}
+          disabled={!editingProductId || isSubmittingProduct}
+          style={styles.sheetDeleteButton}
+          textStyle={styles.sheetDeleteText}
+        />
+      </AppSheet>
+
+      <AppSheet
+        visible={isDeleteConfirmVisible}
+        title="Delete product?"
+        subtitle="This action removes the product from the supplier catalog. Please confirm before continuing."
+        onClose={() => setDeleteConfirmVisible(false)}
+      >
+        <AppButton
+          title="Keep product"
+          onPress={() => setDeleteConfirmVisible(false)}
+          style={styles.sheetActionButton}
+          textStyle={styles.sheetActionText}
+        />
+        <AppButton
+          title="Delete permanently"
+          variant="danger"
+          onPress={handleDeleteProduct}
+          loading={isSubmittingProduct}
+          disabled={!editingProductId}
+          style={styles.sheetDeleteButton}
+          textStyle={styles.sheetDeleteText}
+        />
+      </AppSheet>
 
       <AppSnackbar
         visible={isSnackbarVisible}
@@ -826,5 +1036,18 @@ const styles = StyleSheet.create({
   },
   emptyStateButton: {
     alignSelf: 'flex-start',
+  },
+  sheetActionButton: {
+    borderRadius: 18,
+  },
+  sheetActionText: {
+    fontWeight: '800',
+  },
+  sheetDeleteButton: {
+    borderRadius: 18,
+  },
+  sheetDeleteText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
 });

@@ -43,6 +43,8 @@ const iconMap: Record<string, string> = {
   offline: '◌',
   online: '●',
   route: '⌁',
+  eye: '◉',
+  eyeOff: '⊘',
 };
 
 export interface AppIconProps {

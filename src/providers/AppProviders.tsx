@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   alertBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   alertCard: {
     width: '100%',

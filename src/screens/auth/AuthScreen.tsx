@@ -361,6 +361,22 @@ function buildSupplierAddressSummary({
     .join(', ');
 }
 
+function buildFallbackSupplierResolvedAddress(
+  location: LocationValue,
+  existingSummary: string = '',
+): SupplierResolvedAddress {
+  const coordinateLabel = formatLocationValue(location) || 'Selected location';
+
+  return {
+    displayName: existingSummary || `Dropped pin at ${coordinateLabel}`,
+    addressLine1: existingSummary || `Dropped pin at ${coordinateLabel}`,
+    addressLine2: '',
+    city: '',
+    postalCode: '',
+    state: '',
+  };
+}
+
 interface OtpPinInputProps {
   value: string;
   onChangeText: (value: string) => void;
@@ -1215,6 +1231,16 @@ export function AuthScreen({
     const requestId = ++supplierAddressReverseRequestIdRef.current;
     setResolvingSupplierAddress(true);
     setSupplierAddressPickerError('');
+    setSupplierAddressMapSelectionDetails(current => {
+      if (current?.displayName) {
+        return current;
+      }
+
+      return buildFallbackSupplierResolvedAddress(
+        location,
+        supplierAddressDisplay || supplierAddressSummary,
+      );
+    });
 
     try {
       const nextAddress = await reverseGeocodeSupplierLocation(location);
@@ -1226,13 +1252,14 @@ export function AuthScreen({
       skipNextSupplierAddressSearchRef.current = true;
       setSupplierAddressSearchQuery(nextAddress.displayName);
       setSupplierAddressSearchResults([]);
-    } catch (error: any) {
+    } catch {
       if (supplierAddressReverseRequestIdRef.current !== requestId) {
         return;
       }
 
-      setSupplierAddressPickerError(
-        error?.message ?? 'Unable to fetch the selected address.',
+      setSupplierAddressPickerError('');
+      setSupplierAddressMapSelectionDetails(current =>
+        current ?? buildFallbackSupplierResolvedAddress(location, supplierAddressSummary),
       );
     } finally {
       if (supplierAddressReverseRequestIdRef.current === requestId) {
@@ -1261,6 +1288,12 @@ export function AuthScreen({
       lng: longitude.toFixed(6),
     };
     setSupplierAddressMapSelection(nextLocation);
+    setSupplierAddressMapSelectionDetails(
+      buildFallbackSupplierResolvedAddress(
+        nextLocation,
+        supplierAddressDisplay || supplierAddressSummary,
+      ),
+    );
     syncSupplierAddressForLocation(nextLocation);
   };
 
@@ -1273,6 +1306,12 @@ export function AuthScreen({
       lng: longitude.toFixed(6),
     };
     setSupplierAddressMapSelection(nextLocation);
+    setSupplierAddressMapSelectionDetails(
+      buildFallbackSupplierResolvedAddress(
+        nextLocation,
+        supplierAddressDisplay || supplierAddressSummary,
+      ),
+    );
     syncSupplierAddressForLocation(nextLocation);
   };
 
@@ -1820,10 +1859,7 @@ export function AuthScreen({
           style={styles.keyboardView}
         >
           <ScrollView
-            contentContainerStyle={[
-              styles.container,
-              { backgroundColor: palette.screenBackground },
-            ]}
+            contentContainerStyle={styles.container}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -2182,7 +2218,6 @@ export function AuthScreen({
             contentContainerStyle={[
               styles.registrationContainer,
               { paddingTop: modalTopInset },
-              { backgroundColor: palette.screenBackground },
             ]}
             contentInsetAdjustmentBehavior="never"
             keyboardDismissMode="on-drag"
@@ -2829,15 +2864,17 @@ export function AuthScreen({
               onPress={() => {
                 applySupplierAddressSelection(
                   supplierAddressMapSelection,
-                  supplierAddressMapSelectionDetails,
+                  supplierAddressMapSelectionDetails ??
+                    (supplierAddressMapSelection
+                      ? buildFallbackSupplierResolvedAddress(
+                          supplierAddressMapSelection,
+                          supplierAddressSummary,
+                        )
+                      : null),
                 );
                 setSupplierAddressPickerVisible(false);
               }}
-              disabled={
-                !supplierAddressMapSelection ||
-                !supplierAddressMapSelectionDetails ||
-                isBusy
-              }
+              disabled={!supplierAddressMapSelection || isBusy}
               style={[
                 styles.primaryButton,
                 {
@@ -2877,7 +2914,6 @@ export function AuthScreen({
               styles.registrationContainer,
               styles.forgotPasswordContainer,
               { paddingTop: modalTopInset },
-              { backgroundColor: palette.screenBackground },
             ]}
             contentInsetAdjustmentBehavior="never"
             keyboardDismissMode="on-drag"

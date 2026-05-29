@@ -1,5 +1,11 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 interface AuthWaterBackdropProps {
   screenColor: string;
@@ -12,15 +18,27 @@ interface AuthWaterBackdropProps {
   dropletHighlight: string;
 }
 
+type Percent = `${number}%`;
+
 type DropletConfig = {
-  top: string;
-  left?: string;
-  right?: string;
+  top: Percent;
+  left?: Percent;
+  right?: Percent;
   width: number;
   height: number;
   opacity: number;
   tilt: string;
   tail?: number;
+};
+
+type FogPatchConfig = {
+  top?: Percent;
+  bottom?: Percent;
+  left?: Percent;
+  right?: Percent;
+  width: Percent;
+  height: Percent;
+  opacity: number;
 };
 
 const DROPLETS: DropletConfig[] = [
@@ -39,12 +57,12 @@ const DROPLETS: DropletConfig[] = [
   { top: '82%', left: '10%', width: 36, height: 50, opacity: 0.68, tilt: '-10deg', tail: 10 },
 ];
 
-const FOG_PATCHES = [
+const FOG_PATCHES: FogPatchConfig[] = [
   { top: '11%', left: '14%', width: '28%', height: '16%', opacity: 0.18 },
   { top: '34%', right: '10%', width: '22%', height: '12%', opacity: 0.14 },
   { top: '60%', left: '8%', width: '30%', height: '14%', opacity: 0.16 },
   { bottom: '8%', right: '12%', width: '26%', height: '16%', opacity: 0.12 },
-] as const;
+];
 
 export function AuthWaterBackdrop({
   screenColor,
@@ -61,7 +79,7 @@ export function AuthWaterBackdrop({
   const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const driftAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(drift, {
           toValue: 1,
@@ -76,24 +94,31 @@ export function AuthWaterBackdrop({
           useNativeDriver: true,
         }),
       ]),
-    ).start();
+    );
+    const shimmerAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, {
+          toValue: 1,
+          duration: 3600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmer, {
+          toValue: 0,
+          duration: 3600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
 
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, {
-          toValue: 1,
-          duration: 3600,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmer, {
-          toValue: 0,
-          duration: 3600,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
+    driftAnimation.start();
+    shimmerAnimation.start();
+
+    return () => {
+      driftAnimation.stop();
+      shimmerAnimation.stop();
+    };
   }, [drift, shimmer]);
 
   const topOrbStyle = useMemo(
@@ -127,12 +152,12 @@ export function AuthWaterBackdrop({
   });
   const sheenOpacity = shimmer.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.2, 0.4],
+    outputRange: [0.22, 0.42],
   });
 
   return (
     <View pointerEvents="none" style={styles.backdrop}>
-      <View style={[styles.screenWash, { backgroundColor: screenColor }]} />
+      <View style={[styles.fill, { backgroundColor: screenColor }]} />
 
       <Animated.View
         style={[
@@ -180,10 +205,12 @@ export function AuthWaterBackdrop({
         ]}
       />
 
-      <View style={[styles.frostLayer, { backgroundColor: frostTint }]} />
+      <View style={[styles.fill, styles.frostOverlay, { backgroundColor: frostTint }]} />
+
       <View style={styles.glassPane}>
         <View style={[styles.glassPaneBorder, { borderColor: dropletEdge }]} />
       </View>
+
       {FOG_PATCHES.map((patch, index) => (
         <Animated.View
           key={`fog-${index}`}
@@ -202,6 +229,7 @@ export function AuthWaterBackdrop({
           ]}
         />
       ))}
+
       <Animated.View
         style={[
           styles.glassSheen,
@@ -212,74 +240,87 @@ export function AuthWaterBackdrop({
         ]}
       />
 
-      {DROPLETS.map((droplet, index) => {
-        const travel = ((index % 4) + 1) * 2.5;
-        const translateY = drift.interpolate({
-          inputRange: [0, 1],
-          outputRange: [-travel, travel],
-        });
+      <View style={styles.dropletsLayer}>
+        {DROPLETS.map((droplet, index) => {
+          const travel = ((index % 4) + 1) * 2.5;
+          const translateY = drift.interpolate({
+            inputRange: [0, 1],
+            outputRange: [-travel, travel],
+          });
 
-        return (
-          <Animated.View
-            key={`${droplet.top}-${droplet.left ?? droplet.right}-${index}`}
-            style={[
-              styles.droplet,
-              {
-                top: droplet.top,
-                left: droplet.left,
-                right: droplet.right,
-                width: droplet.width,
-                height: droplet.height,
-              opacity: droplet.opacity,
-              backgroundColor: dropletFill,
-              borderColor: dropletEdge,
-              transform: [{ rotate: droplet.tilt }, { translateY }],
-            },
-          ]}
-        >
-          {droplet.tail ? (
-            <View
+          return (
+            <Animated.View
+              key={`${droplet.top}-${droplet.left ?? droplet.right}-${index}`}
               style={[
-                styles.dropletTail,
+                styles.droplet,
                 {
-                  height: droplet.tail,
-                  backgroundColor: dropletHighlight,
+                  top: droplet.top,
+                  left: droplet.left,
+                  right: droplet.right,
+                  width: droplet.width,
+                  height: droplet.height,
+                  opacity: droplet.opacity,
+                  backgroundColor: dropletFill,
+                  borderColor: dropletEdge,
+                  transform: [{ rotate: droplet.tilt }, { translateY }],
                 },
               ]}
-            />
-          ) : null}
-          <View
-            style={[
-              styles.dropletCore,
-              { backgroundColor: dropletHighlight },
-            ]}
-          />
-          <View
-            style={[
-              styles.dropletHighlight,
-                { backgroundColor: dropletHighlight },
-              ]}
-            />
-            <View
-              style={[
-                styles.dropletShadow,
-                { backgroundColor: dropletEdge },
-              ]}
-            />
-          </Animated.View>
-        );
-      })}
+            >
+              {droplet.tail ? (
+                <View
+                  style={[
+                    styles.dropletTail,
+                    {
+                      height: droplet.tail,
+                      backgroundColor: dropletHighlight,
+                    },
+                  ]}
+                />
+              ) : null}
+              <View
+                style={[
+                  styles.dropletCore,
+                  { backgroundColor: dropletHighlight },
+                ]}
+              />
+              <View
+                style={[
+                  styles.dropletHighlight,
+                  { backgroundColor: dropletHighlight },
+                ]}
+              />
+              <View
+                style={[
+                  styles.dropletShadow,
+                  { backgroundColor: dropletEdge },
+                ]}
+              />
+            </Animated.View>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     overflow: 'hidden',
   },
-  screenWash: {
-    ...StyleSheet.absoluteFillObject,
+  fill: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  frostOverlay: {
+    opacity: 0.52,
   },
   glowOrb: {
     position: 'absolute',
@@ -298,9 +339,6 @@ const styles = StyleSheet.create({
     top: '28%',
     right: -22,
   },
-  frostLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
   glassPane: {
     position: 'absolute',
     top: '2.5%',
@@ -308,13 +346,13 @@ const styles = StyleSheet.create({
     bottom: '2.5%',
     left: '2%',
     borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
   glassPaneBorder: {
     flex: 1,
     borderWidth: 1,
     borderRadius: 36,
-    opacity: 0.34,
+    opacity: 0.3,
   },
   fogPatch: {
     position: 'absolute',
@@ -328,6 +366,13 @@ const styles = StyleSheet.create({
     height: '84%',
     borderRadius: 999,
     transform: [{ rotate: '7deg' }],
+  },
+  dropletsLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   droplet: {
     position: 'absolute',

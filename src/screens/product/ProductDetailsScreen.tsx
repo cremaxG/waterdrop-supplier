@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -33,6 +34,7 @@ export interface ProductRecord {
   includingGst?: boolean;
   brand?: string;
   category: string;
+  type?: string;
   status?: string;
   unitLabel: string;
   createdAt?: string;
@@ -49,6 +51,8 @@ export interface ProductRecord {
 interface ProductDetailsScreenProps {
   product: ProductRecord;
   onBack: () => void;
+  onEdit?: () => void;
+  onOpenActionMenu?: () => void;
   onUpdateGodownInventory: (nextQuantity: number) => void;
   onUpdateVehicleInventory: (vehicleId: string, nextQuantity: number) => void;
 }
@@ -68,6 +72,8 @@ function getQuantityValidationMessage(value: string, label: string) {
 export function ProductDetailsScreen({
   product,
   onBack,
+  onEdit,
+  onOpenActionMenu,
   onUpdateGodownInventory,
   onUpdateVehicleInventory,
 }: ProductDetailsScreenProps) {
@@ -126,7 +132,24 @@ export function ProductDetailsScreen({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      <AppBackButton onPress={onBack} label={t('productBackButton')} />
+      <View style={styles.headerBar}>
+        <AppBackButton onPress={onBack} label={t('productBackButton')} />
+        {onOpenActionMenu ? (
+          <Pressable
+            onPress={onOpenActionMenu}
+            style={[
+              styles.moreButton,
+              {
+                backgroundColor: palette.surface,
+                borderColor: palette.border,
+                shadowColor: palette.shadow,
+              },
+            ]}
+          >
+            <AppIcon name="more" size={20} color={palette.accentStrong} />
+          </Pressable>
+        ) : null}
+      </View>
 
       <View
         style={[
@@ -327,6 +350,20 @@ export function ProductDetailsScreen({
           ))}
         </View>
       </VehicleSectionCard>
+
+      {onEdit ? (
+        <VehicleSectionCard
+          title="Product actions"
+          subtitle="Jump into edit mode or continue managing stock from here."
+        >
+          <AppButton
+            title="Edit product"
+            onPress={onEdit}
+            style={styles.primaryButton}
+            textStyle={styles.primaryButtonText}
+          />
+        </VehicleSectionCard>
+      ) : null}
     </ScrollView>
   );
 }
@@ -336,6 +373,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 32,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  moreButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    elevation: 4,
   },
   heroCard: {
     borderWidth: 1,

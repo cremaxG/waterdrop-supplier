@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -79,6 +80,8 @@ export interface VehicleRecord {
 interface VehicleDetailsScreenProps {
   vehicle: VehicleRecord;
   onBack: () => void;
+  onEdit?: () => void;
+  onOpenActionMenu?: () => void;
   onToggleAvailability: () => void;
   onOpenHistory: () => void;
 }
@@ -86,6 +89,8 @@ interface VehicleDetailsScreenProps {
 export function VehicleDetailsScreen({
   vehicle,
   onBack,
+  onEdit,
+  onOpenActionMenu,
   onToggleAvailability,
   onOpenHistory,
 }: VehicleDetailsScreenProps) {
@@ -123,7 +128,24 @@ export function VehicleDetailsScreen({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      <AppBackButton onPress={onBack} label={t('vehicleBackButton')} />
+      <View style={styles.headerBar}>
+        <AppBackButton onPress={onBack} label={t('vehicleBackButton')} />
+        {onOpenActionMenu ? (
+          <Pressable
+            onPress={onOpenActionMenu}
+            style={[
+              styles.moreButton,
+              {
+                backgroundColor: palette.surface,
+                borderColor: palette.border,
+                shadowColor: palette.shadow,
+              },
+            ]}
+          >
+            <AppIcon name="more" size={20} color={palette.accentStrong} />
+          </Pressable>
+        ) : null}
+      </View>
 
       <View
         style={[
@@ -432,6 +454,20 @@ export function VehicleDetailsScreen({
         subtitle={t('vehicleActionsSubtitle')}
       >
         <View style={styles.infoStack}>
+          {onEdit ? (
+            <AppButton
+              title="Edit vehicle"
+              onPress={onEdit}
+              style={[
+                styles.secondaryButton,
+                {
+                  backgroundColor: palette.accentSoft,
+                  borderColor: palette.accentSoftBorder,
+                },
+              ]}
+              textStyle={[styles.secondaryButtonText, { color: palette.accentStrong }]}
+            />
+          ) : null}
           <AppButton
             title={
               isPendingReview
@@ -469,6 +505,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 32,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  moreButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    elevation: 4,
   },
   heroCard: {
     borderWidth: 1,

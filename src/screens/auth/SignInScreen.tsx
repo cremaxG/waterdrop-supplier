@@ -16,6 +16,7 @@ import {
   AppIcon,
   AppInput,
   AppText,
+  AuthWaterBackdrop,
 } from '../../components';
 import { Country, DEFAULT_COUNTRY } from '../../constants/countries';
 
@@ -26,6 +27,7 @@ export interface SignInScreenProps {
 export function SignInScreen({ onSignIn }: SignInScreenProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const isDark = theme.statusBarStyle === 'light-content';
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedCountry, setSelectedCountry] =
     useState<Country>(DEFAULT_COUNTRY);
@@ -49,15 +51,22 @@ export function SignInScreen({ onSignIn }: SignInScreenProps) {
       ]}
     >
       <StatusBar barStyle={theme.statusBarStyle} />
+      <AuthWaterBackdrop
+        screenColor={theme.background}
+        glowTop={isDark ? 'rgba(34, 211, 238, 0.18)' : 'rgba(14, 165, 233, 0.18)'}
+        glowBottom={isDark ? 'rgba(59, 130, 246, 0.18)' : 'rgba(2, 132, 199, 0.14)'}
+        frostTint={isDark ? 'rgba(10, 37, 64, 0.3)' : 'rgba(255, 255, 255, 0.5)'}
+        mistTint={isDark ? 'rgba(125, 211, 252, 0.14)' : 'rgba(186, 230, 253, 0.34)'}
+        dropletFill={isDark ? 'rgba(186, 230, 253, 0.12)' : 'rgba(255, 255, 255, 0.46)'}
+        dropletEdge={isDark ? 'rgba(125, 211, 252, 0.26)' : 'rgba(125, 211, 252, 0.4)'}
+        dropletHighlight={isDark ? 'rgba(240, 249, 255, 0.18)' : 'rgba(255, 255, 255, 0.72)'}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <ScrollView
-          contentContainerStyle={[
-            styles.container,
-            { backgroundColor: theme.background },
-          ]}
+          contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.headerSection}>

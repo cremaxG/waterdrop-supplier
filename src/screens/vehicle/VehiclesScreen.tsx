@@ -1173,6 +1173,11 @@ export function VehiclesScreen({
           <VehicleDetailsScreen
             vehicle={selectedVehicle}
             onBack={closeVehicleDetails}
+            onEdit={() => openVehicleForm(selectedVehicle.id)}
+            onOpenActionMenu={() => {
+              setEditingVehicleId(selectedVehicle.id);
+              setVehicleActionsVisible(true);
+            }}
             onToggleAvailability={() => handleToggleVehicleAvailability(selectedVehicle.id)}
             onOpenHistory={openVehicleHistory}
           />
