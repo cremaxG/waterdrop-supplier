@@ -1257,6 +1257,19 @@ export function VehiclesScreen({
         onClose={() => setVehicleActionsVisible(false)}
       >
         <AppButton
+          title="Edit vehicle"
+          onPress={() => {
+            if (!editingVehicleId) {
+              return;
+            }
+            setVehicleActionsVisible(false);
+            openVehicleForm(editingVehicleId);
+          }}
+          disabled={!editingVehicleId}
+          style={styles.sheetActionButton}
+          textStyle={styles.sheetActionText}
+        />
+        <AppButton
           title={
             editingVehicle?.isOnline ? 'Mark as offline' : 'Mark as online'
           }

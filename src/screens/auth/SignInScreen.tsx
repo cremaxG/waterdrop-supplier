@@ -96,6 +96,7 @@ export function SignInScreen({ onSignIn }: SignInScreenProps) {
                   onChangeText={setPhoneNumber}
                   keyboardType="phone-pad"
                   maxLength={10}
+                  containerStyle={styles.phoneInputContainerWrap}
                   style={styles.phoneInput}
                 />
               </View>
@@ -164,11 +165,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 24,
+    width: '100%',
   },
   inputWrapper: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  phoneInputContainerWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   dialCode: {
     fontSize: 16,
@@ -177,7 +184,12 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
+    width: '100%',
     marginLeft: 0,
+    minHeight: 64,
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 0.6,
   },
   buttonGroup: {
     gap: 12,

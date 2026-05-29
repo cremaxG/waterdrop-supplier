@@ -7,6 +7,7 @@ import {
   TextInputProps,
   TextStyle,
   View,
+  ViewStyle,
 } from 'react-native';
 import { useAppPalette } from '../hooks/useAppPalette';
 import { useTranslation } from '../providers/AppProviders';
@@ -16,12 +17,14 @@ export interface AppInputProps extends TextInputProps {
   hasError?: boolean;
   placeholderKey?: string;
   style?: StyleProp<TextStyle>;
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
 export function AppInput({
   hasError = false,
   placeholderKey,
   style,
+  containerStyle,
   secureTextEntry,
   ...rest
 }: AppInputProps) {
@@ -56,7 +59,7 @@ export function AppInput({
   );
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, containerStyle]}>
       <TextInput
         placeholder={placeholder}
         placeholderTextColor={palette.muted}
@@ -91,6 +94,7 @@ export function AppInput({
 
 const styles = StyleSheet.create({
   wrapper: {
+    minWidth: 0,
     position: 'relative',
     justifyContent: 'center',
   },
@@ -101,6 +105,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 16,
+    width: '100%',
   },
   inputWithIcon: {
     paddingRight: 52,

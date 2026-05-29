@@ -206,6 +206,35 @@ export function AddProductScreen({
     setCurrentStep(current => Math.min(current + 1, steps.length - 1));
   };
 
+  const handleStepPress = (targetStep: number) => {
+    if (targetStep === currentStep) {
+      return;
+    }
+
+    if (targetStep < currentStep) {
+      setCurrentStep(targetStep);
+      return;
+    }
+
+    const fieldsToValidate = steps
+      .slice(0, targetStep)
+      .flatMap(step => step.fields);
+
+    markStepTouched(fieldsToValidate);
+
+    const firstInvalidStep = steps.findIndex(
+      (step, index) =>
+        index < targetStep && step.fields.some(field => validationErrors[field]),
+    );
+
+    if (firstInvalidStep >= 0) {
+      setCurrentStep(firstInvalidStep);
+      return;
+    }
+
+    setCurrentStep(targetStep);
+  };
+
   const handleSubmit = async () => {
     setDidAttemptSubmit(true);
     markStepTouched(steps.flatMap(step => step.fields));
@@ -230,11 +259,7 @@ export function AddProductScreen({
     return (
       <Pressable
         key={step.key}
-        onPress={() => {
-          if (index <= currentStep) {
-            setCurrentStep(index);
-          }
-        }}
+        onPress={() => handleStepPress(index)}
         style={[
           styles.stepChip,
           {
@@ -587,12 +612,15 @@ const styles = StyleSheet.create({
   },
   stepRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     marginBottom: 14,
   },
   stepChip: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
     minHeight: 54,
+    minWidth: 92,
     borderWidth: 1,
     borderRadius: 18,
     paddingHorizontal: 12,

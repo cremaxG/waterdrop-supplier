@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { AppButton, AppIcon, AppRefreshScrollView, AppText } from '../../components';
 import {
   ProfileActionRow,
@@ -57,12 +57,53 @@ interface ProfileScreenProps {
   onRequestLogout: () => void;
 }
 
+type ProfileStepKey = 'overview' | 'operations' | 'resources' | 'account';
+
+interface ProfileStepDefinition {
+  key: ProfileStepKey;
+  icon: string;
+  label: string;
+  title: string;
+  subtitle: string;
+}
+
 function unwrapApiData<T>(response: T | { data?: T } | null | undefined): T | null {
   if (response && typeof response === 'object' && 'data' in response) {
     return (response as { data?: T }).data ?? null;
   }
 
   return (response as T) ?? null;
+}
+
+function formatDateLabel(value?: string) {
+  if (!value) {
+    return '—';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatCoordinateLabel(lat?: string, lng?: string) {
+  if (!lat || !lng) {
+    return '—';
+  }
+
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return '—';
+  }
+
+  return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
 }
 
 export function ProfileScreen({
@@ -92,6 +133,45 @@ export function ProfileScreen({
   const [profile, setProfile] = useState<SupplierProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const steps = useMemo<ProfileStepDefinition[]>(
+    () => [
+      {
+        key: 'overview',
+        icon: 'dashboard',
+        label: 'Overview',
+        title: 'Business overview',
+        subtitle:
+          'See the supplier identity, compliance details, and primary dispatch address in one place.',
+      },
+      {
+        key: 'operations',
+        icon: 'route',
+        label: 'Ops',
+        title: 'Operations and fleet',
+        subtitle:
+          'Jump into day-to-day controls for business settings, vehicles, products, and alerts.',
+      },
+      {
+        key: 'resources',
+        icon: 'package',
+        label: 'Resources',
+        title: 'Orders and resources',
+        subtitle:
+          'Navigate quickly to addresses, orders, reviews, favourites, discounts, and media.',
+      },
+      {
+        key: 'account',
+        icon: 'user',
+        label: 'Account',
+        title: 'Account and preferences',
+        subtitle:
+          'Manage payouts, support, language, theme, and logout actions from one section.',
+      },
+    ],
+    [],
+  );
 
   const loadProfile = useCallback(async () => {
     try {
@@ -121,10 +201,320 @@ export function ProfileScreen({
   };
 
   const retryFetchProfile = loadProfile;
+  const currentStepDefinition = steps[currentStep];
 
-  const profileAddress = [profile?.address_line_1, profile?.city, profile?.state]
+  const profileAddress = [
+    profile?.address_line_1,
+    profile?.address_line_2,
+    profile?.city,
+    profile?.state,
+    profile?.postal_code,
+  ]
     .filter(Boolean)
     .join(', ');
+  const profileCoverage = [profile?.city, profile?.state, profile?.country]
+    .filter(Boolean)
+    .join(', ');
+  const profileCoordinates = formatCoordinateLabel(profile?.lat, profile?.lng);
+  const profileUpdatedAt = formatDateLabel(profile?.updated_at);
+  const profileCreatedAt = formatDateLabel(profile?.created_at);
+
+  const renderStepChip = (step: ProfileStepDefinition, index: number) => {
+    const isActive = currentStep === index;
+    const isComplete = currentStep > index;
+
+    return (
+      <Pressable
+        key={step.key}
+        onPress={() => setCurrentStep(index)}
+        style={[
+          styles.stepChip,
+          {
+            backgroundColor: isActive ? palette.accentSoft : palette.surface,
+            borderColor:
+              isActive || isComplete ? palette.accentSoftBorder : palette.border,
+            shadowColor: palette.shadow,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.stepIconBadge,
+            {
+              backgroundColor:
+                isActive || isComplete ? palette.accentSoft : palette.surfaceSoft,
+              borderColor:
+                isActive || isComplete ? palette.accentSoftBorder : palette.border,
+            },
+          ]}
+        >
+          <AppIcon
+            name={step.icon}
+            size={14}
+            color={
+              isActive || isComplete ? palette.accentStrong : palette.muted
+            }
+          />
+        </View>
+        <AppText
+          style={[
+            styles.stepLabel,
+            {
+              color:
+                isActive || isComplete ? palette.accentStrong : palette.muted,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {step.label}
+        </AppText>
+      </Pressable>
+    );
+  };
+
+  const renderCurrentStepContent = () => {
+    if (!profile) {
+      return null;
+    }
+
+    switch (currentStepDefinition.key) {
+      case 'overview':
+        return (
+          <ProfileCard
+            title={currentStepDefinition.title}
+            subtitle={currentStepDefinition.subtitle}
+          >
+            <View style={styles.stack}>
+              <ProfileDetailRow
+                icon="document"
+                label={t('profileGstinLabel')}
+                value={profile.gstin || '—'}
+              />
+              <ProfileDetailRow
+                icon="document"
+                label="CIN"
+                value={profile.cin || '—'}
+              />
+              <ProfileDetailRow
+                icon="mail"
+                label={t('profileEmailLabel')}
+                value={profile.email || '—'}
+              />
+              <ProfileDetailRow
+                icon="phone"
+                label={t('profilePhoneLabel')}
+                value={profile.phone || '—'}
+              />
+              <ProfileDetailRow
+                icon="location"
+                label={t('profileAddressLabel')}
+                value={profileAddress || '—'}
+              />
+              <ProfileDetailRow
+                icon="route"
+                label="Supplier location"
+                value={profileCoordinates}
+              />
+              <ProfileDetailRow
+                icon="clock"
+                label="Last updated"
+                value={profileUpdatedAt}
+              />
+              <ProfileActionRow
+                icon="building"
+                title={t('profileBusinessAction')}
+                description={t('profileBusinessActionDescription')}
+                onPress={onOpenBusinessSheet}
+              />
+              <AppButton
+                title={t('profileSupportButton')}
+                onPress={openSupportCall}
+                variant="primary"
+                style={styles.supportButton}
+              />
+            </View>
+          </ProfileCard>
+        );
+
+      case 'operations':
+        return (
+          <ProfileCard
+            title={currentStepDefinition.title}
+            subtitle={currentStepDefinition.subtitle}
+          >
+            <View style={styles.stack}>
+              <ProfileDetailRow
+                icon="location"
+                label={t('profileCoverageLabel')}
+                value={profileCoverage || '—'}
+              />
+              <ProfileDetailRow
+                icon="clock"
+                label={t('profileHoursLabel')}
+                value={t('profileHoursValue')}
+              />
+              <ProfileDetailRow
+                icon="shield"
+                label="Verification status"
+                value={profile.verified ? t('profileVerifiedBadge') : 'Pending verification'}
+              />
+              <ProfileActionRow
+                icon="vehicles"
+                title={t('profileQuickActionVehicles')}
+                description={t('profileQuickActionVehiclesDescription')}
+                onPress={onOpenVehicles}
+              />
+              <ProfileActionRow
+                icon="products"
+                title={t('profileQuickActionProducts')}
+                description={t('profileQuickActionProductsDescription')}
+                onPress={onOpenProducts}
+              />
+              <ProfileActionRow
+                icon="document"
+                title={t('profileQuickActionDocs')}
+                description={t('profileQuickActionDocsDescription')}
+                onPress={onOpenDocumentsSheet}
+              />
+              <ProfileActionRow
+                icon="bell"
+                title={t('profileNotificationsAction')}
+                description={t('profileNotificationsDescription')}
+                onPress={onOpenAlertsSheet}
+              />
+            </View>
+          </ProfileCard>
+        );
+
+      case 'resources':
+        return (
+          <ProfileCard
+            title={currentStepDefinition.title}
+            subtitle={currentStepDefinition.subtitle}
+          >
+            <View style={styles.stack}>
+              <ProfileActionRow
+                icon="location"
+                title={t('supplierResourcesAddressesTitle')}
+                description={t('profileAddressesDescription')}
+                onPress={onOpenAddresses}
+              />
+              <ProfileActionRow
+                icon="package"
+                title={t('supplierResourcesOrdersTitle')}
+                description={t('profileOrdersDescription')}
+                onPress={onOpenOrders}
+              />
+              <ProfileActionRow
+                icon="star"
+                title={t('supplierResourcesReviewsTitle')}
+                description={t('profileReviewsDescription')}
+                onPress={onOpenReviews}
+              />
+              <ProfileActionRow
+                icon="heart"
+                title={t('supplierResourcesFavouritesTitle')}
+                description={t('profileFavouritesDescription')}
+                onPress={onOpenFavourites}
+              />
+              <ProfileActionRow
+                icon="money"
+                title={t('supplierResourcesDiscountsTitle')}
+                description={t('profileDiscountsDescription')}
+                onPress={onOpenDiscounts}
+              />
+              <ProfileActionRow
+                icon="image"
+                title={t('supplierResourcesImagesTitle')}
+                description={t('profileImagesDescription')}
+                onPress={onOpenImages}
+              />
+            </View>
+          </ProfileCard>
+        );
+
+      case 'account':
+      default:
+        return (
+          <>
+            <ProfileCard
+              title={currentStepDefinition.title}
+              subtitle={currentStepDefinition.subtitle}
+            >
+              <View style={styles.stack}>
+                <ProfileActionRow
+                  icon="info"
+                  title={t('profileAboutUsAction')}
+                  description={t('profileAboutUsDescription')}
+                  onPress={onOpenAboutSheet}
+                />
+                <ProfileActionRow
+                  icon="money"
+                  title={t('profilePayoutAction')}
+                  description={t('profilePayoutDescription')}
+                  onPress={onOpenPayoutSheet}
+                />
+                <ProfileActionRow
+                  icon="support"
+                  title={t('profileSupportAction')}
+                  description={t('profileSupportActionDescription')}
+                  onPress={onOpenSupportSheet}
+                />
+                <ProfileDetailRow
+                  icon="clock"
+                  label={t('profileSinceLabel')}
+                  value={profileCreatedAt}
+                />
+                <AppButton
+                  title={t('profileCallSupportButton')}
+                  onPress={openSupportCall}
+                  style={[
+                    styles.supportButton,
+                    {
+                      backgroundColor: palette.accentSoft,
+                      borderColor: palette.accentSoftBorder,
+                    },
+                  ]}
+                  textStyle={[
+                    styles.supportButtonText,
+                    { color: palette.accentStrong },
+                  ]}
+                />
+              </View>
+            </ProfileCard>
+            <ProfilePreferenceCard
+              icon="theme"
+              title={t('themeSectionTitle')}
+              currentLabel={t('preferenceCurrentLabel')}
+              currentValue={currentThemeLabel}
+              onPress={onOpenThemeSheet}
+            />
+            <ProfilePreferenceCard
+              icon="language"
+              title={t('languageSectionTitle')}
+              currentLabel={t('preferenceCurrentLabel')}
+              currentValue={currentLanguageLabel}
+              onPress={onOpenLanguageSheet}
+            />
+            <ProfileCard>
+              <AppText style={[styles.logoutTitle, { color: palette.text }]}>
+                {t('profileLogoutTitle')}
+              </AppText>
+              <AppText style={[styles.logoutSubtitle, { color: palette.muted }]}>
+                {t('profileLogoutSubtitle')}
+              </AppText>
+              <AppButton
+                title={t('logoutButton')}
+                onPress={onRequestLogout}
+                variant="danger"
+                style={styles.logoutButton}
+                textStyle={styles.logoutButtonText}
+              />
+            </ProfileCard>
+          </>
+        );
+    }
+  };
 
   if (loading) {
     return (
@@ -269,220 +659,48 @@ export function ProfileScreen({
             value: profile.ratings ? `${profile.ratings}/5` : '—',
           },
           { icon: 'shield', label: t('profileCompletionLabel'), value: '97%' },
-          { icon: 'clock', label: t('profileResponseLabel'), value: '3 min' },
+          {
+            icon: 'clock',
+            label: 'Updated',
+            value: profileUpdatedAt,
+          },
         ]}
       />
 
-      <ProfileCard
-        title={t('profileSummaryTitle')}
-        subtitle={t('profileSummarySubtitle')}
-      >
-        <View style={styles.stack}>
-          <ProfileDetailRow
-            icon="document"
-            label={t('profileGstinLabel')}
-            value={profile.gstin || '—'}
-          />
-          <ProfileDetailRow
-            icon="mail"
-            label={t('profileEmailLabel')}
-            value={profile.email || '—'}
-          />
-          <ProfileDetailRow
-            icon="location"
-            label={t('profileAddressLabel')}
-            value={profileAddress || '—'}
-          />
-          <AppButton
-            title={t('profileSupportButton')}
-            onPress={openSupportCall}
-            variant="primary"
-            style={styles.supportButton}
-          />
-        </View>
-      </ProfileCard>
+      <View style={styles.stepRow}>{steps.map(renderStepChip)}</View>
 
-      <ProfileCard
-        title={t('profileOperationsTitle')}
-        subtitle={t('profileOperationsSubtitle')}
-      >
-        <View style={styles.stack}>
-          <ProfileDetailRow
-            icon="phone"
-            label={t('profilePhoneLabel')}
-            value={profile.phone}
+      {renderCurrentStepContent()}
+
+      <View style={styles.footerActions}>
+        {currentStep > 0 ? (
+          <AppButton
+            title="Previous"
+            onPress={() => setCurrentStep(step => Math.max(0, step - 1))}
+            style={styles.secondaryAction}
+            textStyle={{ color: palette.accentStrong }}
           />
-          <ProfileDetailRow
-            icon="location"
-            label={t('profileCoverageLabel')}
-            value={
-              [profile.city, profile.state, profile.country]
-                .filter(Boolean)
-                .join(', ') || '—'
+        ) : (
+          <View style={styles.actionSpacer} />
+        )}
+
+        {currentStep < steps.length - 1 ? (
+          <AppButton
+            title="Next"
+            onPress={() =>
+              setCurrentStep(step => Math.min(steps.length - 1, step + 1))
             }
+            style={styles.primaryAction}
+            textStyle={styles.primaryActionText}
           />
-          <ProfileDetailRow
-            icon="clock"
-            label={t('profileHoursLabel')}
-            value={t('profileHoursValue')}
-          />
-          <ProfileActionRow
-            icon="building"
-            title={t('profileBusinessAction')}
-            description={t('profileBusinessActionDescription')}
-            onPress={onOpenBusinessSheet}
-          />
-        </View>
-      </ProfileCard>
-
-      <ProfileCard
-        title={t('profileQuickActionsTitle')}
-        subtitle={t('profileQuickActionsSubtitle')}
-      >
-        <View style={styles.stack}>
-          <ProfileActionRow
-            icon="vehicles"
-            title={t('profileQuickActionVehicles')}
-            description={t('profileQuickActionVehiclesDescription')}
-            onPress={onOpenVehicles}
-          />
-          <ProfileActionRow
-            icon="products"
-            title={t('profileQuickActionProducts')}
-            description={t('profileQuickActionProductsDescription')}
-            onPress={onOpenProducts}
-          />
-          <ProfileActionRow
-            icon="document"
-            title={t('profileQuickActionDocs')}
-            description={t('profileQuickActionDocsDescription')}
-            onPress={onOpenDocumentsSheet}
-          />
-          <ProfileActionRow
-            icon="bell"
-            title={t('profileNotificationsAction')}
-            description={t('profileNotificationsDescription')}
-            onPress={onOpenAlertsSheet}
-          />
-        </View>
-      </ProfileCard>
-
-      <ProfileCard
-        title={t('profileResourcesTitle')}
-        subtitle={t('profileResourcesSubtitle')}
-      >
-        <View style={styles.stack}>
-          <ProfileActionRow
-            icon="location"
-            title={t('supplierResourcesAddressesTitle')}
-            description={t('profileAddressesDescription')}
-            onPress={onOpenAddresses}
-          />
-          <ProfileActionRow
-            icon="package"
-            title={t('supplierResourcesOrdersTitle')}
-            description={t('profileOrdersDescription')}
-            onPress={onOpenOrders}
-          />
-          <ProfileActionRow
-            icon="star"
-            title={t('supplierResourcesReviewsTitle')}
-            description={t('profileReviewsDescription')}
-            onPress={onOpenReviews}
-          />
-          <ProfileActionRow
-            icon="heart"
-            title={t('supplierResourcesFavouritesTitle')}
-            description={t('profileFavouritesDescription')}
-            onPress={onOpenFavourites}
-          />
-          <ProfileActionRow
-            icon="money"
-            title={t('supplierResourcesDiscountsTitle')}
-            description={t('profileDiscountsDescription')}
-            onPress={onOpenDiscounts}
-          />
-          <ProfileActionRow
-            icon="image"
-            title={t('supplierResourcesImagesTitle')}
-            description={t('profileImagesDescription')}
-            onPress={onOpenImages}
-          />
-        </View>
-      </ProfileCard>
-
-      <ProfileCard
-        title={t('profileAccountTitle')}
-        subtitle={t('profileAccountSubtitle')}
-      >
-        <View style={styles.stack}>
-          <ProfileActionRow
-            icon="info"
-            title={t('profileAboutUsAction')}
-            description={t('profileAboutUsDescription')}
-            onPress={onOpenAboutSheet}
-          />
-          <ProfileActionRow
-            icon="money"
-            title={t('profilePayoutAction')}
-            description={t('profilePayoutDescription')}
-            onPress={onOpenPayoutSheet}
-          />
-          <ProfileActionRow
-            icon="support"
-            title={t('profileSupportAction')}
-            description={t('profileSupportActionDescription')}
-            onPress={onOpenSupportSheet}
-          />
+        ) : (
           <AppButton
-            title={t('profileCallSupportButton')}
-            onPress={openSupportCall}
-            style={[
-              styles.supportButton,
-              {
-                backgroundColor: palette.accentSoft,
-                borderColor: palette.accentSoftBorder,
-              },
-            ]}
-            textStyle={[
-              styles.supportButtonText,
-              { color: palette.accentStrong },
-            ]}
+            title="Back to overview"
+            onPress={() => setCurrentStep(0)}
+            style={styles.primaryAction}
+            textStyle={styles.primaryActionText}
           />
-        </View>
-      </ProfileCard>
-
-      <ProfilePreferenceCard
-        icon="theme"
-        title={t('themeSectionTitle')}
-        currentLabel={t('preferenceCurrentLabel')}
-        currentValue={currentThemeLabel}
-        onPress={onOpenThemeSheet}
-      />
-
-      <ProfilePreferenceCard
-        icon="language"
-        title={t('languageSectionTitle')}
-        currentLabel={t('preferenceCurrentLabel')}
-        currentValue={currentLanguageLabel}
-        onPress={onOpenLanguageSheet}
-      />
-
-      <ProfileCard>
-        <AppText style={[styles.logoutTitle, { color: palette.text }]}>
-          {t('profileLogoutTitle')}
-        </AppText>
-        <AppText style={[styles.logoutSubtitle, { color: palette.muted }]}>
-          {t('profileLogoutSubtitle')}
-        </AppText>
-        <AppButton
-          title={t('logoutButton')}
-          onPress={onRequestLogout}
-          variant="danger"
-          style={styles.logoutButton}
-          textStyle={styles.logoutButtonText}
-        />
-      </ProfileCard>
+        )}
+      </View>
     </AppRefreshScrollView>
   );
 }
@@ -504,11 +722,63 @@ const styles = StyleSheet.create({
   stack: {
     gap: 12,
   },
+  stepRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  stepChip: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  stepIconBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepLabel: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '800',
+  },
   supportButton: {
     borderRadius: 18,
   },
   supportButtonText: {
     fontWeight: '800',
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  secondaryAction: {
+    flex: 1,
+    borderRadius: 18,
+  },
+  primaryAction: {
+    flex: 1,
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+    borderRadius: 18,
+  },
+  primaryActionText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  actionSpacer: {
+    flex: 1,
   },
   logoutTitle: {
     fontSize: 18,

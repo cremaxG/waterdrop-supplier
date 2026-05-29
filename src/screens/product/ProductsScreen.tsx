@@ -780,6 +780,7 @@ export function ProductsScreen({
             setProductActionsVisible(false);
             openProductForm(editingProductId);
           }}
+          disabled={!editingProductId}
           style={styles.sheetActionButton}
           textStyle={styles.sheetActionText}
         />
