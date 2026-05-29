@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     left: 0,
   },
   frostOverlay: {
-    opacity: 0.52,
+    opacity: 0.32,
   },
   glowOrb: {
     position: 'absolute',
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     bottom: '2.5%',
     left: '2%',
     borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(255,255,255,0.015)',
   },
   glassPaneBorder: {
     flex: 1,
@@ -377,14 +377,14 @@ const styles = StyleSheet.create({
   droplet: {
     position: 'absolute',
     borderRadius: 999,
-    borderWidth: 1,
+    borderWidth: 1.4,
     overflow: 'hidden',
     shadowColor: '#FFFFFF',
-    shadowOpacity: 0.26,
-    shadowRadius: 10,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
   },
   dropletTail: {
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     width: '44%',
     height: '44%',
     borderRadius: 999,
-    opacity: 0.22,
+    opacity: 0.32,
   },
   dropletHighlight: {
     position: 'absolute',
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     width: '28%',
     height: '42%',
     borderRadius: 999,
-    opacity: 0.9,
+    opacity: 1,
   },
   dropletShadow: {
     position: 'absolute',
@@ -421,6 +421,6 @@ const styles = StyleSheet.create({
     width: '48%',
     height: '40%',
     borderRadius: 999,
-    opacity: 0.24,
+    opacity: 0.34,
   },
 });

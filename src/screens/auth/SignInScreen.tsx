@@ -55,11 +55,11 @@ export function SignInScreen({ onSignIn }: SignInScreenProps) {
         screenColor={theme.background}
         glowTop={isDark ? 'rgba(34, 211, 238, 0.18)' : 'rgba(14, 165, 233, 0.18)'}
         glowBottom={isDark ? 'rgba(59, 130, 246, 0.18)' : 'rgba(2, 132, 199, 0.14)'}
-        frostTint={isDark ? 'rgba(10, 37, 64, 0.3)' : 'rgba(255, 255, 255, 0.5)'}
-        mistTint={isDark ? 'rgba(125, 211, 252, 0.14)' : 'rgba(186, 230, 253, 0.34)'}
-        dropletFill={isDark ? 'rgba(186, 230, 253, 0.12)' : 'rgba(255, 255, 255, 0.46)'}
-        dropletEdge={isDark ? 'rgba(125, 211, 252, 0.26)' : 'rgba(125, 211, 252, 0.4)'}
-        dropletHighlight={isDark ? 'rgba(240, 249, 255, 0.18)' : 'rgba(255, 255, 255, 0.72)'}
+        frostTint={isDark ? 'rgba(10, 37, 64, 0.18)' : 'rgba(255, 255, 255, 0.32)'}
+        mistTint={isDark ? 'rgba(125, 211, 252, 0.18)' : 'rgba(186, 230, 253, 0.28)'}
+        dropletFill={isDark ? 'rgba(186, 230, 253, 0.22)' : 'rgba(255, 255, 255, 0.72)'}
+        dropletEdge={isDark ? 'rgba(125, 211, 252, 0.42)' : 'rgba(56, 189, 248, 0.56)'}
+        dropletHighlight={isDark ? 'rgba(240, 249, 255, 0.42)' : 'rgba(255, 255, 255, 0.92)'}
       />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
