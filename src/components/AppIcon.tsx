@@ -35,6 +35,14 @@ const iconMap: Record<string, string> = {
   back: '‹',
   map: '⌖',
   heart: '♥',
+  more: '⋯',
+  view: '◫',
+  history: '⟲',
+  trash: '🗑',
+  track: '◎',
+  offline: '◌',
+  online: '●',
+  route: '⌁',
 };
 
 export interface AppIconProps {

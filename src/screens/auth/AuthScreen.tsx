@@ -514,6 +514,7 @@ export function AuthScreen({
   const [isResolvingSupplierAddress, setResolvingSupplierAddress] = useState(false);
   const [supplierAddressPickerError, setSupplierAddressPickerError] = useState('');
   const [submitAction, setSubmitAction] = useState<SubmitAction>(null);
+  const isBusy = submitAction !== null;
   const [loginTouched, setLoginTouched] = useState<Partial<Record<LoginField, boolean>>>({});
   const [forgotPasswordTouched, setForgotPasswordTouched] = useState<
     Partial<Record<ForgotPasswordField, boolean>>
@@ -524,6 +525,7 @@ export function AuthScreen({
   const [didAttemptLogin, setDidAttemptLogin] = useState(false);
   const [didAttemptForgotPassword, setDidAttemptForgotPassword] = useState(false);
   const [didAttemptRegister, setDidAttemptRegister] = useState(false);
+  const [registerStep, setRegisterStep] = useState(0);
 
   const supplierAddressMapRef = useRef<MapView | null>(null);
   const supplierAddressSearchRequestIdRef = useRef(0);
@@ -1009,10 +1011,31 @@ export function AuthScreen({
     Boolean(forgotPasswordErrors.password) ||
     Boolean(forgotPasswordErrors.confirmPassword);
   const isRegisterDisabled = Object.values(registerErrors).some(Boolean);
-  const isBusy = submitAction !== null;
   const isLoginOtpResendCoolingDown = otpRequested && loginOtpCooldownSeconds > 0;
   const isForgotOtpResendCoolingDown =
     forgotPasswordOtpRequested && forgotOtpCooldownSeconds > 0;
+  const registerStepDefinitions = [
+    {
+      label: 'Account',
+      title: 'Account access',
+      subtitle:
+        'Set the business name, mobile number, email, and password for supplier login.',
+      fields: ['name', 'phone', 'email', 'password', 'confirmPassword'] as RegisterField[],
+    },
+    {
+      label: 'Business',
+      title: 'Business identity',
+      subtitle: 'Add your compliance details so review can begin without back-and-forth.',
+      fields: ['gstin', 'cin'] as RegisterField[],
+    },
+    {
+      label: 'Address',
+      title: 'Business address',
+      subtitle:
+        'Search, pin, and confirm the business location. We use the picked location to fill the address fields.',
+      fields: ['address1', 'address2', 'city', 'postalCode', 'state'] as RegisterField[],
+    },
+  ];
 
   const formatOtpCooldownLabel = (baseLabel: string, seconds: number) =>
     `${baseLabel} (${seconds}s)`;
@@ -1281,9 +1304,11 @@ export function AuthScreen({
     setSupplierAddressPickerError('');
     setRegisterTouched({});
     setDidAttemptRegister(false);
+    setRegisterStep(0);
   };
 
   const openSupplierRegistration = () => {
+    setRegisterStep(0);
     setShowSupplierRegistration(true);
   };
 
@@ -1313,6 +1338,33 @@ export function AuthScreen({
   const closeSupplierRegistration = () => {
     setShowSupplierRegistration(false);
     resetSupplierForm();
+  };
+
+  const markRegisterFieldsTouched = (fields: RegisterField[]) => {
+    setRegisterTouched(current =>
+      fields.reduce(
+        (next, field) => ({
+          ...next,
+          [field]: true,
+        }),
+        current,
+      ),
+    );
+  };
+
+  const handleNextRegisterStep = () => {
+    const currentDefinition = registerStepDefinitions[registerStep];
+    if (!currentDefinition) {
+      return;
+    }
+
+    markRegisterFieldsTouched(currentDefinition.fields);
+    const hasStepErrors = currentDefinition.fields.some(field => registerErrors[field]);
+    if (hasStepErrors) {
+      return;
+    }
+
+    setRegisterStep(current => Math.min(current + 1, registerStepDefinitions.length - 1));
   };
 
   const completeLogin = (response: any) => {
@@ -1531,6 +1583,7 @@ export function AuthScreen({
 
   const handleRegisterSupplier = async () => {
     setDidAttemptRegister(true);
+    markRegisterFieldsTouched(registerStepDefinitions.flatMap(step => step.fields));
     if (isRegisterDisabled || isBusy) {
       return;
     }
@@ -1550,6 +1603,8 @@ export function AuthScreen({
         postal_code: supplierPostalCode.trim(),
         state: supplierState.trim(),
         country: supplierCountry.name,
+        lat: supplierAddressLocation?.lat,
+        lng: supplierAddressLocation?.lng,
         status: 'pending',
         online: false,
         ratings: '0',
@@ -1740,6 +1795,8 @@ export function AuthScreen({
       </View>
     );
   };
+
+  const currentRegisterStepDefinition = registerStepDefinitions[registerStep];
 
   return (
     <>
@@ -2167,9 +2224,9 @@ export function AuthScreen({
             </Animated.View>
 
             <View style={styles.stepRow}>
-              {renderStep('Account', true, true)}
-              {renderStep('Business', true, true)}
-              {renderStep('Address', true, true)}
+              {registerStepDefinitions.map((step, index) =>
+                renderStep(step.label, registerStep === index, registerStep > index),
+              )}
             </View>
 
             <Animated.View
@@ -2183,372 +2240,409 @@ export function AuthScreen({
                 },
               ]}
             >
-              <View style={styles.formSectionBlock}>
-                <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
-                  ACCOUNT ACCESS
-                </AppText>
-                {/* {renderSectionTitle(
-                  'Contact and sign-in details',
-                  'Account access',
-                  'These details help your team sign in and help us verify who owns the supplier account.',
-                )} */}
-
-                {renderFieldLabel('Business name')}
-                <AppInput
-                  placeholder={t('businessNamePlaceholder')}
-                  value={supplierName}
-                  onChangeText={setSupplierName}
-                  onBlur={() => markRegisterTouched('name')}
-                  autoCapitalize="words"
-                  keyboardType="default"
-                  returnKeyType="next"
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={shouldShowRegisterError('name') && Boolean(registerErrors.name)}
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('name'),
-                  registerErrors.name,
-                )}
-
-                {renderFieldLabel('Business mobile number')}
-                <View style={styles.phoneInputContainer}>
-                  <AppCountryPicker
-                    selectedCountry={supplierCountry}
-                    onCountrySelect={setSupplierCountry}
-                    disabled={isBusy}
-                  />
-                  <View style={styles.inputWrapper}>
-                    <AppText style={[styles.dialCode, { color: palette.accentStrong }]}>
-                      {supplierCountry.dialCode}
-                    </AppText>
-                    <AppInput
-                      placeholder={t('businessMobilePlaceholder')}
-                      value={supplierPhone}
-                      onChangeText={value => setSupplierPhone(value.replace(/\D/g, ''))}
-                      onBlur={() => markRegisterTouched('phone')}
-                      keyboardType="phone-pad"
-                      textContentType="telephoneNumber"
-                      autoComplete="tel"
-                      returnKeyType="next"
-                      maxLength={10}
-                      editable={!isBusy}
-                      style={styles.phoneInput}
-                      hasError={
-                        shouldShowRegisterError('phone') && Boolean(registerErrors.phone)
-                      }
-                    />
-                  </View>
-                </View>
-                {renderValidationMessage(
-                  shouldShowRegisterError('phone'),
-                  registerErrors.phone,
-                )}
-
-                {renderFieldLabel('Business email')}
-                <AppInput
-                  placeholder={t('businessEmailPlaceholder')}
-                  value={supplierEmail}
-                  onChangeText={setSupplierEmail}
-                  onBlur={() => markRegisterTouched('email')}
-                  keyboardType="email-address"
-                  textContentType="emailAddress"
-                  autoComplete="email"
-                  autoCapitalize="none"
-                  returnKeyType="next"
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={shouldShowRegisterError('email') && Boolean(registerErrors.email)}
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('email'),
-                  registerErrors.email,
-                )}
-
-                {renderFieldLabel('Password', 'Minimum 6 characters')}
-                <AppInput
-                  placeholderKey="passwordPlaceholder"
-                  value={supplierPassword}
-                  onChangeText={setSupplierPassword}
-                  onBlur={() => markRegisterTouched('password')}
-                  secureTextEntry
-                  textContentType="newPassword"
-                  autoComplete="password-new"
-                  returnKeyType="next"
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={
-                    shouldShowRegisterError('password') && Boolean(registerErrors.password)
-                  }
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('password'),
-                  registerErrors.password,
-                )}
-
-                {renderFieldLabel('Confirm password')}
-                <AppInput
-                  placeholderKey="confirmPasswordPlaceholder"
-                  value={supplierConfirmPassword}
-                  onChangeText={setSupplierConfirmPassword}
-                  onBlur={() => markRegisterTouched('confirmPassword')}
-                  secureTextEntry
-                  textContentType="newPassword"
-                  autoComplete="password-new"
-                  returnKeyType="next"
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={
-                    shouldShowRegisterError('confirmPassword') &&
-                    Boolean(registerErrors.confirmPassword)
-                  }
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('confirmPassword'),
-                  registerErrors.confirmPassword,
-                )}
-              </View>
-
-              <View style={[styles.sectionDivider, { backgroundColor: palette.surfaceBorder }]} />
-
-              <View style={styles.formSectionBlock}>
-                <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
-                  BUSINESS IDENTITY
-                </AppText>
-                {/* {renderSectionTitle(
-                  'Compliance details',
-                  'Compliance details',
-                  'GSTIN is required for review. CIN is optional when applicable to your business registration.',
-                )} */}
-
-                {renderFieldLabel('GSTIN')}
-                <AppInput
-                  placeholder={t('businessGstPlaceholder')}
-                  value={supplierGstin}
-                  onChangeText={value => setSupplierGstin(value.toUpperCase())}
-                  onBlur={() => markRegisterTouched('gstin')}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  maxLength={15}
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={shouldShowRegisterError('gstin') && Boolean(registerErrors.gstin)}
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('gstin'),
-                  registerErrors.gstin,
-                )}
-
-                {renderFieldLabel('CIN', 'Optional if not applicable')}
-                <AppInput
-                  placeholder={t('cinPlaceholder')}
-                  value={supplierCin}
-                  onChangeText={value => setSupplierCin(value.toUpperCase())}
-                  onBlur={() => markRegisterTouched('cin')}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  maxLength={21}
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={shouldShowRegisterError('cin') && Boolean(registerErrors.cin)}
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('cin'),
-                  registerErrors.cin,
-                )}
-              </View>
-
-              <View style={[styles.sectionDivider, { backgroundColor: palette.surfaceBorder }]} />
-
-              <View style={styles.formSectionBlock}>
-                <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
-                  ADDRESS DETAILS
-                </AppText>
-                {/* {renderSectionTitle(
-                  'Business location',
-                  'Business address',
-                  'A complete and accurate address helps speed up supplier approval and operations setup later.',
-                )} */}
-
-                <View
-                  style={[
-                    styles.locationSummaryCard,
-                    {
-                      backgroundColor: palette.accentSoft,
-                      borderColor: palette.accentSoftBorder,
-                    },
-                  ]}
-                >
-                  <View style={styles.locationSummaryHeader}>
-                    <AppText style={[styles.locationSummaryLabel, { color: palette.subtleText }]}>
-                      Business address picker
-                    </AppText>
-                    <AppText
-                      style={[styles.locationOptionalLabel, { color: palette.accentStrong }]}
-                    >
-                      Auto-fill
-                    </AppText>
-                  </View>
-                  <AppText style={[styles.locationSummaryValue, { color: palette.heading }]}>
-                    {supplierAddressSummary || 'Search and pin your business address'}
-                  </AppText>
-                  {supplierAddressDisplay ? (
-                    <AppText style={[styles.locationAddressValue, { color: palette.subtleText }]}>
-                      {supplierAddressDisplay}
-                    </AppText>
-                  ) : null}
-                  {supplierAddressLocation ? (
-                    <AppText style={[styles.locationSummaryHint, { color: palette.subtleText }]}>
-                      {formatLocationValue(supplierAddressLocation)}
-                    </AppText>
-                  ) : (
-                    <AppText style={[styles.locationSummaryHint, { color: palette.subtleText }]}>
-                      Search an address or drop the marker on the map to fill the fields below.
-                    </AppText>
-                  )}
-                </View>
-
-                <AppButton
-                  title="Pick business address"
-                  onPress={() => setSupplierAddressPickerVisible(true)}
-                  disabled={isBusy}
-                  style={[
-                    styles.locationActionButton,
-                    {
-                      backgroundColor: palette.accentSoft,
-                      borderColor: palette.accentSoftBorder,
-                    },
-                  ]}
-                  textStyle={{ color: palette.accentStrong }}
-                />
-
-                {renderFieldLabel('Address line 1')}
-                <AppInput
-                  placeholder={t('addressLine1Placeholder')}
-                  value={supplierAddressLine1}
-                  onChangeText={setSupplierAddressLine1}
-                  onBlur={() => markRegisterTouched('address1')}
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={
-                    shouldShowRegisterError('address1') && Boolean(registerErrors.address1)
-                  }
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('address1'),
-                  registerErrors.address1,
-                )}
-
-                {renderFieldLabel('Address line 2', 'Optional')}
-                <AppInput
-                  placeholder={t('addressLine2Placeholder')}
-                  value={supplierAddressLine2}
-                  onChangeText={setSupplierAddressLine2}
-                  onBlur={() => markRegisterTouched('address2')}
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={
-                    shouldShowRegisterError('address2') && Boolean(registerErrors.address2)
-                  }
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('address2'),
-                  registerErrors.address2,
-                )}
-
-                <View style={styles.doubleFieldRow}>
-                  <View style={styles.doubleFieldCell}>
-                    {renderFieldLabel('City')}
-                    <AppInput
-                      placeholder={t('cityPlaceholder')}
-                      value={supplierCity}
-                      onChangeText={setSupplierCity}
-                      onBlur={() => markRegisterTouched('city')}
-                      autoCapitalize="words"
-                      returnKeyType="next"
-                      editable={!isBusy}
-                      style={styles.compactInput}
-                      hasError={shouldShowRegisterError('city') && Boolean(registerErrors.city)}
-                    />
-                    {renderValidationMessage(
-                      shouldShowRegisterError('city'),
-                      registerErrors.city,
-                    )}
-                  </View>
-                  <View style={styles.doubleFieldCell}>
-                    {renderFieldLabel('Postal code')}
-                    <AppInput
-                      placeholder={t('postalCodePlaceholder')}
-                      value={supplierPostalCode}
-                      onChangeText={value => setSupplierPostalCode(value.replace(/\D/g, ''))}
-                      onBlur={() => markRegisterTouched('postalCode')}
-                      keyboardType="number-pad"
-                      returnKeyType="next"
-                      maxLength={6}
-                      editable={!isBusy}
-                      style={styles.compactInput}
-                      hasError={
-                        shouldShowRegisterError('postalCode') &&
-                        Boolean(registerErrors.postalCode)
-                      }
-                    />
-                    {renderValidationMessage(
-                      shouldShowRegisterError('postalCode'),
-                      registerErrors.postalCode,
-                    )}
-                  </View>
-                </View>
-
-                {renderFieldLabel('State')}
-                <AppInput
-                  placeholder={t('statePlaceholder')}
-                  value={supplierState}
-                  onChangeText={setSupplierState}
-                  onBlur={() => markRegisterTouched('state')}
-                  autoCapitalize="words"
-                  returnKeyType="done"
-                  editable={!isBusy}
-                  style={styles.input}
-                  hasError={shouldShowRegisterError('state') && Boolean(registerErrors.state)}
-                />
-                {renderValidationMessage(
-                  shouldShowRegisterError('state'),
-                  registerErrors.state,
-                )}
-
-                {(supplierAddressLocation || supplierAddressSummary) && (
-                  <AppButton
-                    title="Edit picked address"
-                    onPress={() => setSupplierAddressPickerVisible(true)}
-                    disabled={isBusy}
-                    variant="ghost"
-                    style={styles.locationUtilityButton}
-                    textStyle={{ color: palette.accentStrong }}
-                  />
-                )}
-              </View>
-
-              <AppButton
-                title="Submit application"
-                onPress={handleRegisterSupplier}
-                disabled={isRegisterDisabled || isBusy}
-                loading={submitAction === 'supplier-register'}
+              <View
                 style={[
-                  styles.primaryButton,
-                  styles.modalPrimaryButton,
+                  styles.statusPanelCompact,
                   {
-                    backgroundColor: palette.accent,
-                    borderColor: palette.accent,
+                    backgroundColor: palette.accentSoft,
+                    borderColor: palette.accentSoftBorder,
                   },
                 ]}
-                textStyle={{ color: palette.accentTextOnFill }}
-              />
+              >
+                <AppText style={[styles.statusPanelTitle, { color: palette.heading }]}>
+                  Step {registerStep + 1} of {registerStepDefinitions.length}
+                </AppText>
+                <AppText style={[styles.statusPanelBody, { color: palette.subtleText }]}>
+                  {currentRegisterStepDefinition?.subtitle}
+                </AppText>
+              </View>
+
+              {registerStep === 0 ? (
+                <View style={styles.formSectionBlock}>
+                  <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
+                    ACCOUNT ACCESS
+                  </AppText>
+
+                  {renderFieldLabel('Business name')}
+                  <AppInput
+                    placeholder={t('businessNamePlaceholder')}
+                    value={supplierName}
+                    onChangeText={setSupplierName}
+                    onBlur={() => markRegisterTouched('name')}
+                    autoCapitalize="words"
+                    keyboardType="default"
+                    returnKeyType="next"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={shouldShowRegisterError('name') && Boolean(registerErrors.name)}
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('name'),
+                    registerErrors.name,
+                  )}
+
+                  {renderFieldLabel('Business mobile number')}
+                  <View style={styles.phoneInputContainer}>
+                    <AppCountryPicker
+                      selectedCountry={supplierCountry}
+                      onCountrySelect={setSupplierCountry}
+                      disabled={isBusy}
+                    />
+                    <View style={styles.inputWrapper}>
+                      <AppText style={[styles.dialCode, { color: palette.accentStrong }]}>
+                        {supplierCountry.dialCode}
+                      </AppText>
+                      <AppInput
+                        placeholder={t('businessMobilePlaceholder')}
+                        value={supplierPhone}
+                        onChangeText={value => setSupplierPhone(value.replace(/\D/g, ''))}
+                        onBlur={() => markRegisterTouched('phone')}
+                        keyboardType="phone-pad"
+                        textContentType="telephoneNumber"
+                        autoComplete="tel"
+                        returnKeyType="next"
+                        maxLength={10}
+                        editable={!isBusy}
+                        style={styles.phoneInput}
+                        hasError={
+                          shouldShowRegisterError('phone') && Boolean(registerErrors.phone)
+                        }
+                      />
+                    </View>
+                  </View>
+                  {renderValidationMessage(
+                    shouldShowRegisterError('phone'),
+                    registerErrors.phone,
+                  )}
+
+                  {renderFieldLabel('Business email')}
+                  <AppInput
+                    placeholder={t('businessEmailPlaceholder')}
+                    value={supplierEmail}
+                    onChangeText={setSupplierEmail}
+                    onBlur={() => markRegisterTouched('email')}
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    returnKeyType="next"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={shouldShowRegisterError('email') && Boolean(registerErrors.email)}
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('email'),
+                    registerErrors.email,
+                  )}
+
+                  {renderFieldLabel('Password', 'Minimum 6 characters')}
+                  <AppInput
+                    placeholderKey="passwordPlaceholder"
+                    value={supplierPassword}
+                    onChangeText={setSupplierPassword}
+                    onBlur={() => markRegisterTouched('password')}
+                    secureTextEntry
+                    textContentType="newPassword"
+                    autoComplete="password-new"
+                    returnKeyType="next"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={
+                      shouldShowRegisterError('password') && Boolean(registerErrors.password)
+                    }
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('password'),
+                    registerErrors.password,
+                  )}
+
+                  {renderFieldLabel('Confirm password')}
+                  <AppInput
+                    placeholderKey="confirmPasswordPlaceholder"
+                    value={supplierConfirmPassword}
+                    onChangeText={setSupplierConfirmPassword}
+                    onBlur={() => markRegisterTouched('confirmPassword')}
+                    secureTextEntry
+                    textContentType="newPassword"
+                    autoComplete="password-new"
+                    returnKeyType="done"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={
+                      shouldShowRegisterError('confirmPassword') &&
+                      Boolean(registerErrors.confirmPassword)
+                    }
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('confirmPassword'),
+                    registerErrors.confirmPassword,
+                  )}
+                </View>
+              ) : null}
+
+              {registerStep === 1 ? (
+                <View style={styles.formSectionBlock}>
+                  <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
+                    BUSINESS IDENTITY
+                  </AppText>
+
+                  {renderFieldLabel('GSTIN')}
+                  <AppInput
+                    placeholder={t('businessGstPlaceholder')}
+                    value={supplierGstin}
+                    onChangeText={value => setSupplierGstin(value.toUpperCase())}
+                    onBlur={() => markRegisterTouched('gstin')}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                    maxLength={15}
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={shouldShowRegisterError('gstin') && Boolean(registerErrors.gstin)}
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('gstin'),
+                    registerErrors.gstin,
+                  )}
+
+                  {renderFieldLabel('CIN', 'Optional if not applicable')}
+                  <AppInput
+                    placeholder={t('cinPlaceholder')}
+                    value={supplierCin}
+                    onChangeText={value => setSupplierCin(value.toUpperCase())}
+                    onBlur={() => markRegisterTouched('cin')}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    maxLength={21}
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={shouldShowRegisterError('cin') && Boolean(registerErrors.cin)}
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('cin'),
+                    registerErrors.cin,
+                  )}
+                </View>
+              ) : null}
+
+              {registerStep === 2 ? (
+                <View style={styles.formSectionBlock}>
+                  <AppText style={[styles.formSectionEyebrow, { color: palette.accentStrong }]}>
+                    ADDRESS DETAILS
+                  </AppText>
+
+                  <View
+                    style={[
+                      styles.locationSummaryCard,
+                      {
+                        backgroundColor: palette.accentSoft,
+                        borderColor: palette.accentSoftBorder,
+                      },
+                    ]}
+                  >
+                    <View style={styles.locationSummaryHeader}>
+                      <AppText style={[styles.locationSummaryLabel, { color: palette.subtleText }]}>
+                        Business address picker
+                      </AppText>
+                      <AppText
+                        style={[styles.locationOptionalLabel, { color: palette.accentStrong }]}
+                      >
+                        Auto-fill
+                      </AppText>
+                    </View>
+                    <AppText style={[styles.locationSummaryValue, { color: palette.heading }]}>
+                      {supplierAddressSummary || 'Search and pin your business address'}
+                    </AppText>
+                    {supplierAddressDisplay ? (
+                      <AppText
+                        style={[styles.locationAddressValue, { color: palette.subtleText }]}
+                      >
+                        {supplierAddressDisplay}
+                      </AppText>
+                    ) : null}
+                    {supplierAddressLocation ? (
+                      <AppText style={[styles.locationSummaryHint, { color: palette.subtleText }]}>
+                        {formatLocationValue(supplierAddressLocation)}
+                      </AppText>
+                    ) : (
+                      <AppText style={[styles.locationSummaryHint, { color: palette.subtleText }]}>
+                        Search an address or drop the marker on the map to fill the fields below.
+                      </AppText>
+                    )}
+                  </View>
+
+                  <AppButton
+                    title="Pick business address"
+                    onPress={() => setSupplierAddressPickerVisible(true)}
+                    disabled={isBusy}
+                    style={[
+                      styles.locationActionButton,
+                      {
+                        backgroundColor: palette.accentSoft,
+                        borderColor: palette.accentSoftBorder,
+                      },
+                    ]}
+                    textStyle={{ color: palette.accentStrong }}
+                  />
+
+                  {renderFieldLabel('Address line 1')}
+                  <AppInput
+                    placeholder={t('addressLine1Placeholder')}
+                    value={supplierAddressLine1}
+                    onChangeText={setSupplierAddressLine1}
+                    onBlur={() => markRegisterTouched('address1')}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={
+                      shouldShowRegisterError('address1') && Boolean(registerErrors.address1)
+                    }
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('address1'),
+                    registerErrors.address1,
+                  )}
+
+                  {renderFieldLabel('Address line 2', 'Optional')}
+                  <AppInput
+                    placeholder={t('addressLine2Placeholder')}
+                    value={supplierAddressLine2}
+                    onChangeText={setSupplierAddressLine2}
+                    onBlur={() => markRegisterTouched('address2')}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={
+                      shouldShowRegisterError('address2') && Boolean(registerErrors.address2)
+                    }
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('address2'),
+                    registerErrors.address2,
+                  )}
+
+                  <View style={styles.doubleFieldRow}>
+                    <View style={styles.doubleFieldCell}>
+                      {renderFieldLabel('City')}
+                      <AppInput
+                        placeholder={t('cityPlaceholder')}
+                        value={supplierCity}
+                        onChangeText={setSupplierCity}
+                        onBlur={() => markRegisterTouched('city')}
+                        autoCapitalize="words"
+                        returnKeyType="next"
+                        editable={!isBusy}
+                        style={styles.compactInput}
+                        hasError={shouldShowRegisterError('city') && Boolean(registerErrors.city)}
+                      />
+                      {renderValidationMessage(
+                        shouldShowRegisterError('city'),
+                        registerErrors.city,
+                      )}
+                    </View>
+                    <View style={styles.doubleFieldCell}>
+                      {renderFieldLabel('Postal code')}
+                      <AppInput
+                        placeholder={t('postalCodePlaceholder')}
+                        value={supplierPostalCode}
+                        onChangeText={value => setSupplierPostalCode(value.replace(/\D/g, ''))}
+                        onBlur={() => markRegisterTouched('postalCode')}
+                        keyboardType="number-pad"
+                        returnKeyType="next"
+                        maxLength={6}
+                        editable={!isBusy}
+                        style={styles.compactInput}
+                        hasError={
+                          shouldShowRegisterError('postalCode') &&
+                          Boolean(registerErrors.postalCode)
+                        }
+                      />
+                      {renderValidationMessage(
+                        shouldShowRegisterError('postalCode'),
+                        registerErrors.postalCode,
+                      )}
+                    </View>
+                  </View>
+
+                  {renderFieldLabel('State')}
+                  <AppInput
+                    placeholder={t('statePlaceholder')}
+                    value={supplierState}
+                    onChangeText={setSupplierState}
+                    onBlur={() => markRegisterTouched('state')}
+                    autoCapitalize="words"
+                    returnKeyType="done"
+                    editable={!isBusy}
+                    style={styles.input}
+                    hasError={shouldShowRegisterError('state') && Boolean(registerErrors.state)}
+                  />
+                  {renderValidationMessage(
+                    shouldShowRegisterError('state'),
+                    registerErrors.state,
+                  )}
+
+                  {(supplierAddressLocation || supplierAddressSummary) && (
+                    <AppButton
+                      title="Edit picked address"
+                      onPress={() => setSupplierAddressPickerVisible(true)}
+                      disabled={isBusy}
+                      variant="ghost"
+                      style={styles.locationUtilityButton}
+                      textStyle={{ color: palette.accentStrong }}
+                    />
+                  )}
+                </View>
+              ) : null}
+
+              <View style={styles.modalFooterRow}>
+                {registerStep > 0 ? (
+                  <AppButton
+                    title="Previous"
+                    onPress={() => setRegisterStep(current => Math.max(0, current - 1))}
+                    disabled={isBusy}
+                    style={styles.modalSecondaryButton}
+                    textStyle={{ color: palette.accentStrong }}
+                  />
+                ) : (
+                  <View style={styles.modalFooterSpacer} />
+                )}
+
+                {registerStep < registerStepDefinitions.length - 1 ? (
+                  <AppButton
+                    title="Next"
+                    onPress={handleNextRegisterStep}
+                    disabled={isBusy}
+                    style={[
+                      styles.primaryButton,
+                      styles.modalFooterPrimaryButton,
+                      {
+                        backgroundColor: palette.accent,
+                        borderColor: palette.accent,
+                      },
+                    ]}
+                    textStyle={{ color: palette.accentTextOnFill }}
+                  />
+                ) : (
+                  <AppButton
+                    title="Submit application"
+                    onPress={handleRegisterSupplier}
+                    disabled={isRegisterDisabled || isBusy}
+                    loading={submitAction === 'supplier-register'}
+                    style={[
+                      styles.primaryButton,
+                      styles.modalFooterPrimaryButton,
+                      {
+                        backgroundColor: palette.accent,
+                        borderColor: palette.accent,
+                      },
+                    ]}
+                    textStyle={{ color: palette.accentTextOnFill }}
+                  />
+                )}
+              </View>
             </Animated.View>
           </ScrollView>
         </SafeAreaView>
@@ -3319,6 +3413,10 @@ const styles = StyleSheet.create({
   modalPrimaryButton: {
     marginTop: 18,
   },
+  modalFooterPrimaryButton: {
+    flex: 1,
+    marginTop: 10,
+  },
   ctaButton: {
     minHeight: 52,
     borderRadius: 18,
@@ -3331,10 +3429,19 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   modalSecondaryButton: {
+    flex: 1,
     minHeight: 52,
     borderRadius: 18,
     borderWidth: 1,
     marginTop: 10,
+  },
+  modalFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalFooterSpacer: {
+    flex: 1,
   },
   helperText: {
     fontSize: 13,

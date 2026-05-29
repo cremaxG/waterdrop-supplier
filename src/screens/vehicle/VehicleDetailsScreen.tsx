@@ -39,9 +39,18 @@ export interface VehicleHistoryItem {
   notes: string;
 }
 
+export interface VehicleCurrentOrder {
+  id: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  value?: string;
+}
+
 export interface VehicleRecord {
   id: string;
   name: string;
+  vehicleNumber?: string;
   route: string;
   capacity: string;
   currentLocation: string;
@@ -61,6 +70,8 @@ export interface VehicleRecord {
   etaToHub: string;
   isOnline: boolean;
   reviewStatus: 'approved' | 'pending';
+  todayOrdersCount?: number;
+  currentOrder?: VehicleCurrentOrder | null;
   products: VehicleProductItem[];
   history: VehicleHistoryItem[];
 }
@@ -125,14 +136,32 @@ export function VehicleDetailsScreen({
         ]}
       >
         <View style={styles.heroHeader}>
+          <View
+            style={[
+              styles.logoBadge,
+              {
+                backgroundColor: palette.accentSoft,
+                borderColor: palette.accentSoftBorder,
+              },
+            ]}
+          >
+            <AppIcon name="vehicles" size={22} color={statusColor} />
+          </View>
+
           <View style={styles.heroCopy}>
             <AppText style={[styles.heroTitle, { color: palette.text }]}>
               {vehicle.name}
             </AppText>
-            <AppText style={[styles.heroSubtitle, { color: palette.muted }]}>
-              {vehicle.route}
-            </AppText>
+            <View style={styles.heroMetaRow}>
+              <AppText style={[styles.heroNumber, { color: palette.muted }]}>
+                {vehicle.vehicleNumber || vehicle.route}
+              </AppText>
+              <AppText style={[styles.heroCapacity, { color: palette.text }]}>
+                {vehicle.capacity}
+              </AppText>
+            </View>
           </View>
+
           <View
             style={[
               styles.statusPill,
@@ -149,12 +178,7 @@ export function VehicleDetailsScreen({
         </View>
 
         {isPendingReview ? (
-          <View
-            style={[
-              styles.reviewBanner,
-              styles.reviewBannerPending,
-            ]}
-          >
+          <View style={[styles.reviewBanner, styles.reviewBannerPending]}>
             <AppText style={[styles.reviewBannerText, styles.reviewBannerPendingText]}>
               {t('vehiclePendingReviewBanner')}
             </AppText>
@@ -164,8 +188,8 @@ export function VehicleDetailsScreen({
         <View style={styles.metricRow}>
           {[
             {
-              label: t('vehicleMetricEarnings'),
-              value: vehicle.earningsToday,
+              label: t('dashboardMetricOrders'),
+              value: String(vehicle.todayOrdersCount ?? 0),
             },
             {
               label: t('vehicleMetricDeliveredStops'),
@@ -218,58 +242,92 @@ export function VehicleDetailsScreen({
       </View>
 
       <VehicleSectionCard
+        title="Today's orders"
+        subtitle="Current dispatch snapshot and order activity for this vehicle."
+      >
+        <View style={styles.infoStack}>
+          <View
+            style={[
+              styles.currentOrderCard,
+              {
+                backgroundColor: palette.accentSoft,
+                borderColor: palette.accentSoftBorder,
+              },
+            ]}
+          >
+            <AppText style={[styles.currentOrderTitle, { color: palette.text }]}>
+              {vehicle.currentOrder?.title || 'No active order assigned'}
+            </AppText>
+            <AppText style={[styles.currentOrderSubtitle, { color: palette.muted }]}>
+              {vehicle.currentOrder?.subtitle ||
+                'The latest available vehicle order will appear here once assigned.'}
+            </AppText>
+            <View style={styles.currentOrderMetaRow}>
+              <AppText style={[styles.currentOrderMeta, { color: palette.accentStrong }]}>
+                {vehicle.currentOrder?.status || 'Awaiting assignment'}
+              </AppText>
+              {vehicle.currentOrder?.value ? (
+                <AppText style={[styles.currentOrderMeta, { color: palette.text }]}>
+                  {vehicle.currentOrder.value}
+                </AppText>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.inlineDetailsRow}>
+            <View style={styles.inlineDetailCell}>
+              <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
+                Earnings today
+              </AppText>
+              <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
+                {vehicle.earningsToday}
+              </AppText>
+            </View>
+            <View style={styles.inlineDetailCell}>
+              <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
+                Cash collected
+              </AppText>
+              <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
+                {vehicle.cashCollected}
+              </AppText>
+            </View>
+          </View>
+        </View>
+      </VehicleSectionCard>
+
+      <VehicleSectionCard
         title={t('vehicleDriverSectionTitle')}
         subtitle={t('vehicleDriverSectionSubtitle')}
       >
         <View style={styles.infoStack}>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleDriverNameLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.driverName}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleDriverPhoneLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.driverPhone}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              Driver email
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.driverEmail || '—'}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              Driver licence number
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.driverLicenseNumber || '—'}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleDriverRatingLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.driverRating}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleDriverShiftLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.shiftWindow}
-            </AppText>
-          </View>
+          {[
+            { label: t('vehicleDriverNameLabel'), value: vehicle.driverName },
+            { label: t('vehicleDriverPhoneLabel'), value: vehicle.driverPhone || '—' },
+            { label: 'Driver email', value: vehicle.driverEmail || '—' },
+            {
+              label: 'Driver licence number',
+              value: vehicle.driverLicenseNumber || '—',
+            },
+            { label: t('vehicleDriverRatingLabel'), value: vehicle.driverRating || '—' },
+            { label: t('vehicleDriverShiftLabel'), value: vehicle.shiftWindow || '—' },
+          ].map(item => (
+            <View
+              key={item.label}
+              style={[
+                styles.detailBlock,
+                {
+                  backgroundColor: palette.surfaceSoft,
+                  borderColor: palette.border,
+                },
+              ]}
+            >
+              <AppText style={[styles.detailLabel, { color: palette.muted }]}>
+                {item.label}
+              </AppText>
+              <AppText style={[styles.detailValue, { color: palette.text }]}>
+                {item.value}
+              </AppText>
+            </View>
+          ))}
           <AppButton
             title={t('vehicleCallDriverButton')}
             onPress={handleCallDriver}
@@ -290,53 +348,59 @@ export function VehicleDetailsScreen({
         subtitle={t('vehicleOperationsSubtitle')}
       >
         <View style={styles.infoStack}>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleCardCapacity')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.capacity}
-            </AppText>
+          <View style={styles.inlineDetailsRow}>
+            <View style={styles.inlineDetailCell}>
+              <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
+                {t('vehicleCardRoute')}
+              </AppText>
+              <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
+                {vehicle.route}
+              </AppText>
+            </View>
+            <View style={styles.inlineDetailCell}>
+              <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
+                {t('vehicleFuelLevelLabel')}
+              </AppText>
+              <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
+                {vehicle.fuelLevel}
+              </AppText>
+            </View>
           </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleFuelLevelLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.fuelLevel}
-            </AppText>
+          <View style={styles.inlineDetailsRow}>
+            <View style={styles.inlineDetailCell}>
+              <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
+                {t('vehicleLastUpdatedLabel')}
+              </AppText>
+              <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
+                {vehicle.lastUpdated}
+              </AppText>
+            </View>
+            <View style={styles.inlineDetailCell}>
+              <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
+                {t('vehicleEtaToHubLabel')}
+              </AppText>
+              <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
+                {vehicle.etaToHub || '—'}
+              </AppText>
+            </View>
           </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleCashCollectedLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.cashCollected}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleLastUpdatedLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.lastUpdated}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleEtaToHubLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.etaToHub}
-            </AppText>
-          </View>
-          <View style={styles.detailRow}>
-            <AppText style={[styles.detailLabel, { color: palette.muted }]}>
-              {t('vehicleNextServiceLabel')}
-            </AppText>
-            <AppText style={[styles.detailValue, { color: palette.text }]}>
-              {vehicle.nextService}
-            </AppText>
+          <View style={styles.inlineDetailsRow}>
+            <View style={styles.inlineDetailCell}>
+              <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
+                {t('vehicleNextServiceLabel')}
+              </AppText>
+              <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
+                {vehicle.nextService || '—'}
+              </AppText>
+            </View>
+            <View style={styles.inlineDetailCell}>
+              <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
+                Vehicle number
+              </AppText>
+              <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
+                {vehicle.vehicleNumber || '—'}
+              </AppText>
+            </View>
           </View>
         </View>
       </VehicleSectionCard>
@@ -346,14 +410,20 @@ export function VehicleDetailsScreen({
         subtitle={t('vehicleProductSectionSubtitle')}
       >
         <View style={styles.infoStack}>
-          {vehicle.products.map(product => (
-            <VehicleProductRow
-              key={`${vehicle.id}-${product.name}`}
-              name={product.name}
-              quantity={product.quantity}
-              trend={product.trend}
-            />
-          ))}
+          {vehicle.products.length ? (
+            vehicle.products.map(product => (
+              <VehicleProductRow
+                key={`${vehicle.id}-${product.name}`}
+                name={product.name}
+                quantity={product.quantity}
+                trend={product.trend}
+              />
+            ))
+          ) : (
+            <AppText style={[styles.emptyText, { color: palette.muted }]}>
+              No products are assigned to this vehicle yet.
+            </AppText>
+          )}
         </View>
       </VehicleSectionCard>
 
@@ -367,8 +437,8 @@ export function VehicleDetailsScreen({
               isPendingReview
                 ? t('vehiclePendingReviewActionLabel')
                 : vehicle.isOnline
-                ? t('vehicleGoOfflineButton')
-                : t('vehicleGoOnlineButton')
+                  ? t('vehicleGoOfflineButton')
+                  : t('vehicleGoOnlineButton')
             }
             onPress={onToggleAvailability}
             disabled={isPendingReview}
@@ -416,9 +486,38 @@ const styles = StyleSheet.create({
   heroHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
     gap: 12,
     marginBottom: 16,
+  },
+  logoBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCopy: {
+    flex: 1,
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  heroMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  heroNumber: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  heroCapacity: {
+    fontSize: 14,
+    fontWeight: '800',
   },
   reviewBanner: {
     borderWidth: 1,
@@ -438,17 +537,6 @@ const styles = StyleSheet.create({
   },
   reviewBannerPendingText: {
     color: '#D97706',
-  },
-  heroCopy: {
-    flex: 1,
-  },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  heroSubtitle: {
-    fontSize: 15,
   },
   statusPill: {
     paddingHorizontal: 12,
@@ -502,20 +590,57 @@ const styles = StyleSheet.create({
   infoStack: {
     gap: 12,
   },
-  detailRow: {
+  currentOrderCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+  },
+  currentOrderTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  currentOrderSubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 8,
+  },
+  currentOrderMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 16,
+    gap: 12,
+  },
+  currentOrderMeta: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  inlineDetailsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  inlineDetailCell: {
+    flex: 1,
+  },
+  inlineDetailLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  inlineDetailValue: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  detailBlock: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    gap: 6,
   },
   detailLabel: {
-    flex: 1,
-    fontSize: 13,
+    fontSize: 12,
   },
   detailValue: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'right',
+    fontSize: 15,
+    fontWeight: '800',
   },
   onlineButton: {
     backgroundColor: '#0284C7',
@@ -536,5 +661,9 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontWeight: '800',
+  },
+  emptyText: {
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

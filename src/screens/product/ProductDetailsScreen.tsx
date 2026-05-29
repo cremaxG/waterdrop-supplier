@@ -8,6 +8,7 @@ import {
   AppBackButton,
   AppButton,
   AppFieldMessage,
+  AppIcon,
   AppInput,
   AppText,
 } from '../../components';
@@ -25,17 +26,17 @@ export interface ProductRecord {
   id: string;
   name: string;
   sku: string;
-  supplierId: string;
-  price: string;
-  taxCode: string;
-  discount: string;
-  includingGst: boolean;
-  brand: string;
+  supplierId?: string;
+  price?: string;
+  taxCode?: string;
+  discount?: string;
+  includingGst?: boolean;
+  brand?: string;
   category: string;
-  status: string;
+  status?: string;
   unitLabel: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
   totalStock: number;
   godownInventory: number;
   demand: string;
@@ -137,9 +138,27 @@ export function ProductDetailsScreen({
           },
         ]}
       >
-        <AppText style={[styles.heroTitle, { color: palette.text }]}>
-          {product.name}
-        </AppText>
+        <View style={styles.heroHeader}>
+          <View
+            style={[
+              styles.logoBadge,
+              {
+                backgroundColor: palette.accentSoft,
+                borderColor: palette.accentSoftBorder,
+              },
+            ]}
+          >
+            <AppIcon name="products" size={20} color={palette.accentStrong} />
+          </View>
+          <View style={styles.heroCopy}>
+            <AppText style={[styles.heroTitle, { color: palette.text }]}>
+              {product.name}
+            </AppText>
+            <AppText style={[styles.heroMeta, { color: palette.muted }]}>
+              {product.sku || 'Product SKU pending'} • {product.category || 'General'}
+            </AppText>
+          </View>
+        </View>
         <AppText style={[styles.heroSubtitle, { color: palette.muted }]}>
           {product.description}
         </AppText>
@@ -191,12 +210,21 @@ export function ProductDetailsScreen({
             { label: t('productUnitLabel'), value: product.unitLabel },
             { label: t('productTrendLabel'), value: t(product.trendKey) },
           ].map(item => (
-            <View key={item.label} style={styles.detailRow}>
+            <View
+              key={item.label}
+              style={[
+                styles.detailBlock,
+                {
+                  backgroundColor: palette.surfaceSoft,
+                  borderColor: palette.border,
+                },
+              ]}
+            >
               <AppText style={[styles.detailLabel, { color: palette.muted }]}>
                 {item.label}
               </AppText>
               <AppText style={[styles.detailValue, { color: palette.text }]}>
-                {item.value}
+                {item.value || '—'}
               </AppText>
             </View>
           ))}
@@ -322,10 +350,31 @@ const styles = StyleSheet.create({
     },
     elevation: 5,
   },
+  heroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  logoBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCopy: {
+    flex: 1,
+  },
   heroTitle: {
     fontSize: 24,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: 4,
+  },
+  heroMeta: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   heroSubtitle: {
     fontSize: 15,
@@ -354,20 +403,18 @@ const styles = StyleSheet.create({
   detailStack: {
     gap: 12,
   },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 16,
+  detailBlock: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    gap: 6,
   },
   detailLabel: {
-    flex: 1,
-    fontSize: 13,
+    fontSize: 12,
   },
   detailValue: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'right',
+    fontSize: 15,
+    fontWeight: '800',
   },
   primaryButton: {
     backgroundColor: '#0284C7',

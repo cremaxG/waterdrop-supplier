@@ -135,6 +135,7 @@ function normalizeVehicle(item: any): VehicleRecord {
   return {
     id: vehicleId,
     name: item.name ?? item.vehicle_number ?? 'Unnamed vehicle',
+    vehicleNumber: item.vehicle_number ?? item.registration_no ?? item.registrationNo ?? '',
     route: item.route ?? item.vehicle_number ?? 'Unknown route',
     capacity: item.capacity ?? item.load_capacity ?? metadata.capacity ?? 'N/A',
     currentLocation:

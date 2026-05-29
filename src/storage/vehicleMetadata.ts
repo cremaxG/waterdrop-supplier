@@ -42,3 +42,9 @@ export function setStoredVehicleMetadata(
   };
   storage.set(VEHICLE_METADATA_KEY, JSON.stringify(currentMap));
 }
+
+export function removeStoredVehicleMetadata(vehicleId: string) {
+  const currentMap = readMetadataMap();
+  delete currentMap[vehicleId];
+  storage.set(VEHICLE_METADATA_KEY, JSON.stringify(currentMap));
+}

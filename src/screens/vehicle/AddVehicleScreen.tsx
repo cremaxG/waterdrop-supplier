@@ -1,24 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import MapView, {
-  MapPressEvent,
-  Marker,
-  MarkerDragStartEndEvent,
-  Region,
-} from 'react-native-maps';
 import {
   AppBackButton,
   AppButton,
   AppFieldMessage,
+  AppIcon,
   AppInput,
   AppText,
-  AppWaterLoader,
 } from '../../components';
 import { VehicleSectionCard } from '../../components/vehicles';
 import { useAppPalette } from '../../hooks/useAppPalette';
@@ -27,6 +20,7 @@ import { useTranslation } from '../../providers/AppProviders';
 export interface NewVehicleDraft {
   vehicleNumber: string;
   name: string;
+  driverName: string;
   phone: string;
   email: string;
   capacity: string;
@@ -36,6 +30,7 @@ export interface NewVehicleDraft {
 }
 
 interface AddVehicleScreenProps {
+  mode?: 'create' | 'edit';
   onBack: () => void;
   onSubmit: (draft: NewVehicleDraft) => void | Promise<void>;
   isSubmitting?: boolean;
@@ -44,162 +39,39 @@ interface AddVehicleScreenProps {
     lat: string;
     lng: string;
   } | null;
+  initialDraft?: Partial<NewVehicleDraft> | null;
+  onOpenActionMenu?: (() => void) | null;
 }
 
 type VehicleField = Exclude<keyof NewVehicleDraft, 'lat' | 'lng'>;
+type VehicleStepKey = 'vehicle' | 'driver' | 'review';
 
-interface VehicleLocationValue {
-  lat: string;
-  lng: string;
-}
-
-interface LocationSearchResult extends VehicleLocationValue {
-  id: string;
+interface VehicleStepDefinition {
+  key: VehicleStepKey;
+  label: string;
   title: string;
   subtitle: string;
+  fields: VehicleField[];
 }
-
-const DEFAULT_MAP_REGION: Region = {
-  latitude: 20.5937,
-  longitude: 78.9629,
-  latitudeDelta: 12,
-  longitudeDelta: 12,
-};
 
 function isEmail(value: string) {
   return /\S+@\S+\.\S+/.test(value.trim());
 }
 
-function isValidCoordinate(value: string, min: number, max: number) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) && numeric >= min && numeric <= max;
-}
-
-function normalizeLocationValue(
-  lat?: string | null,
-  lng?: string | null,
-): VehicleLocationValue | null {
-  const normalizedLat = String(lat ?? '').trim();
-  const normalizedLng = String(lng ?? '').trim();
-
-  if (!normalizedLat || !normalizedLng) {
-    return null;
-  }
-
-  if (
-    !isValidCoordinate(normalizedLat, -90, 90) ||
-    !isValidCoordinate(normalizedLng, -180, 180)
-  ) {
-    return null;
-  }
-
+function buildInitialDraft(
+  initialDraft?: Partial<NewVehicleDraft> | null,
+): NewVehicleDraft {
   return {
-    lat: normalizedLat,
-    lng: normalizedLng,
+    vehicleNumber: initialDraft?.vehicleNumber ?? '',
+    name: initialDraft?.name ?? '',
+    driverName: initialDraft?.driverName ?? '',
+    phone: initialDraft?.phone ?? '',
+    email: initialDraft?.email ?? '',
+    capacity: initialDraft?.capacity ?? '',
+    driverLicenseNumber: initialDraft?.driverLicenseNumber ?? '',
+    lat: initialDraft?.lat ?? '',
+    lng: initialDraft?.lng ?? '',
   };
-}
-
-function formatLocationValue(location: VehicleLocationValue | null) {
-  if (!location) {
-    return '';
-  }
-
-  return `${Number(location.lat).toFixed(5)}, ${Number(location.lng).toFixed(5)}`;
-}
-
-function getMapRegion(location: VehicleLocationValue | null): Region {
-  if (!location) {
-    return DEFAULT_MAP_REGION;
-  }
-
-  return {
-    latitude: Number(location.lat),
-    longitude: Number(location.lng),
-    latitudeDelta: 0.08,
-    longitudeDelta: 0.08,
-  };
-}
-
-function formatAddressParts(result: any) {
-  const address = result?.address ?? {};
-  const title =
-    address.road ??
-    address.neighbourhood ??
-    address.suburb ??
-    address.village ??
-    address.town ??
-    address.city ??
-    address.county ??
-    'Selected location';
-
-  const subtitleParts = [
-    address.suburb,
-    address.city ?? address.town ?? address.village,
-    address.state,
-    address.postcode,
-    address.country,
-  ].filter(Boolean);
-
-  return {
-    title,
-    subtitle: subtitleParts.join(', '),
-  };
-}
-
-async function searchLocations(query: string): Promise<LocationSearchResult[]> {
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&countrycodes=in&q=${encodeURIComponent(query)}`,
-    {
-      headers: {
-        Accept: 'application/json',
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error('Unable to search locations right now.');
-  }
-
-  const results = await response.json();
-  return Array.isArray(results)
-    ? results
-        .map((item: any) => {
-          const location = normalizeLocationValue(item.lat, item.lon);
-          if (!location) {
-            return null;
-          }
-
-          const address = formatAddressParts(item);
-          return {
-            id: String(item.place_id ?? `${location.lat}-${location.lng}`),
-            lat: location.lat,
-            lng: location.lng,
-            title: address.title,
-            subtitle: item.display_name ?? address.subtitle,
-          };
-        })
-        .filter((item): item is LocationSearchResult => Boolean(item))
-    : [];
-}
-
-async function reverseGeocodeLocation(
-  location: VehicleLocationValue,
-): Promise<string> {
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(location.lat)}&lon=${encodeURIComponent(location.lng)}&zoom=18&addressdetails=1`,
-    {
-      headers: {
-        Accept: 'application/json',
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error('Unable to fetch location address right now.');
-  }
-
-  const result = await response.json();
-  return result?.display_name ?? '';
 }
 
 function getVehicleValidationErrors(draft: NewVehicleDraft) {
@@ -212,8 +84,13 @@ function getVehicleValidationErrors(draft: NewVehicleDraft) {
       : draft.name.trim().length < 2
         ? 'Enter at least 2 characters for the vehicle name.'
         : '',
+    driverName: !draft.driverName.trim()
+      ? 'Driver name is required.'
+      : draft.driverName.trim().length < 2
+        ? 'Enter a complete driver name.'
+        : '',
     phone: !draft.phone.trim()
-      ? 'Contact phone number is required.'
+      ? 'Driver phone number is required.'
       : draft.phone.replace(/\D/g, '').length !== 10
         ? 'Enter a valid 10-digit phone number.'
         : '',
@@ -229,65 +106,86 @@ function getVehicleValidationErrors(draft: NewVehicleDraft) {
 }
 
 export function AddVehicleScreen({
+  mode = 'create',
   onBack,
   onSubmit,
   isSubmitting = false,
   submitErrorMessage = null,
   supplierLocationSuggestion = null,
+  initialDraft = null,
+  onOpenActionMenu = null,
 }: AddVehicleScreenProps) {
   const { t } = useTranslation();
   const palette = useAppPalette();
-  const [draft, setDraft] = useState<NewVehicleDraft>({
-    vehicleNumber: '',
-    name: '',
-    phone: '',
-    email: '',
-    capacity: '',
-    driverLicenseNumber: '',
-    lat: '',
-    lng: '',
-  });
+  const [draft, setDraft] = useState<NewVehicleDraft>(() =>
+    buildInitialDraft(initialDraft),
+  );
   const [touchedFields, setTouchedFields] = useState<
     Partial<Record<VehicleField, boolean>>
   >({});
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
-  const [isLocationPickerVisible, setLocationPickerVisible] = useState(false);
-  const [mapSelection, setMapSelection] = useState<VehicleLocationValue | null>(null);
-  const [selectedLocationAddress, setSelectedLocationAddress] = useState('');
-  const [mapSelectionAddress, setMapSelectionAddress] = useState('');
-  const [locationSearchQuery, setLocationSearchQuery] = useState('');
-  const [locationSearchResults, setLocationSearchResults] = useState<
-    LocationSearchResult[]
-  >([]);
-  const [isSearchingLocations, setSearchingLocations] = useState(false);
-  const [isResolvingAddress, setResolvingAddress] = useState(false);
-  const [locationPickerError, setLocationPickerError] = useState('');
-  const mapRef = useRef<MapView | null>(null);
-  const searchRequestIdRef = useRef(0);
-  const reverseRequestIdRef = useRef(0);
-  const skipNextSearchRef = useRef(false);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  useEffect(() => {
+    setDraft(buildInitialDraft(initialDraft));
+    setTouchedFields({});
+    setDidAttemptSubmit(false);
+    setCurrentStep(0);
+  }, [initialDraft, mode]);
+
+  const steps = useMemo<VehicleStepDefinition[]>(
+    () => [
+      {
+        key: 'vehicle',
+        label: 'Vehicle',
+        title: mode === 'edit' ? 'Vehicle information' : t('vehicleAddSectionVehicle'),
+        subtitle:
+          mode === 'edit'
+            ? 'Update the visible fleet identity for this vehicle.'
+            : t('vehicleAddSectionVehicleSubtitle'),
+        fields: ['vehicleNumber', 'name', 'capacity'],
+      },
+      {
+        key: 'driver',
+        label: 'Driver',
+        title: 'Driver details',
+        subtitle:
+          'Keep the assigned driver details complete so the fleet card and edit view stay useful.',
+        fields: ['driverName', 'phone', 'email', 'driverLicenseNumber'],
+      },
+      {
+        key: 'review',
+        label: 'Review',
+        title: t('vehicleAddReviewTitle'),
+        subtitle:
+          mode === 'edit'
+            ? 'Review the updated vehicle details before saving.'
+            : t('vehicleAddReviewSubtitle'),
+        fields: [],
+      },
+    ],
+    [mode, t],
+  );
 
   const validationErrors = useMemo(() => getVehicleValidationErrors(draft), [draft]);
   const hasValidationErrors = useMemo(
     () => Object.values(validationErrors).some(Boolean),
     [validationErrors],
   );
-  const selectedLocation = useMemo(
-    () => normalizeLocationValue(draft.lat, draft.lng),
-    [draft.lat, draft.lng],
-  );
-  const suggestedLocation = useMemo(
-    () =>
-      normalizeLocationValue(
-        supplierLocationSuggestion?.lat,
-        supplierLocationSuggestion?.lng,
-      ),
-    [supplierLocationSuggestion],
-  );
-  const mapInitialRegion = useMemo(
-    () => getMapRegion(selectedLocation ?? suggestedLocation),
-    [selectedLocation, suggestedLocation],
-  );
+  const isEditMode = mode === 'edit';
+  const headerTitle = isEditMode ? 'Edit vehicle' : t('vehicleAddTitle');
+  const headerSubtitle = isEditMode
+    ? 'Update fleet details, driver contact, and approval information in a cleaner step-by-step flow.'
+    : t('vehicleAddSubtitle');
+  const reviewChipLabel = isEditMode
+    ? 'Fleet update'
+    : t('vehiclePendingReviewStatus');
+  const supplierLocationLabel =
+    supplierLocationSuggestion?.lat && supplierLocationSuggestion?.lng
+      ? `${Number(supplierLocationSuggestion.lat).toFixed(5)}, ${Number(
+          supplierLocationSuggestion.lng,
+        ).toFixed(5)}`
+      : 'Supplier default location will be used when available.';
 
   const updateField = (field: keyof NewVehicleDraft, value: string) => {
     setDraft(current => ({ ...current, [field]: value }));
@@ -297,155 +195,43 @@ export function AddVehicleScreen({
     setTouchedFields(current => ({ ...current, [field]: true }));
   };
 
+  const markStepTouched = (fields: VehicleField[]) => {
+    if (!fields.length) {
+      return;
+    }
+
+    setTouchedFields(current =>
+      fields.reduce(
+        (next, field) => ({
+          ...next,
+          [field]: true,
+        }),
+        current,
+      ),
+    );
+  };
+
   const shouldShowFieldError = (field: VehicleField) =>
     Boolean((didAttemptSubmit || touchedFields[field]) && validationErrors[field]);
 
-  useEffect(() => {
-    if (!isLocationPickerVisible) {
+  const handleNextStep = () => {
+    const step = steps[currentStep];
+    if (!step) {
       return;
     }
 
-    setMapSelection(selectedLocation ?? suggestedLocation ?? null);
-    setMapSelectionAddress(
-      selectedLocation ? selectedLocationAddress : '',
-    );
-    skipNextSearchRef.current = true;
-    setLocationSearchQuery(selectedLocation ? selectedLocationAddress : '');
-    setLocationSearchResults([]);
-    setLocationPickerError('');
-  }, [
-    isLocationPickerVisible,
-    selectedLocation,
-    selectedLocationAddress,
-    suggestedLocation,
-  ]);
-
-  useEffect(() => {
-    if (!isLocationPickerVisible) {
+    markStepTouched(step.fields);
+    const hasStepErrors = step.fields.some(field => validationErrors[field]);
+    if (hasStepErrors) {
       return;
     }
 
-    const trimmedQuery = locationSearchQuery.trim();
-    if (skipNextSearchRef.current) {
-      skipNextSearchRef.current = false;
-      return;
-    }
-
-    if (trimmedQuery.length < 3) {
-      setLocationSearchResults([]);
-      setSearchingLocations(false);
-      return;
-    }
-
-    const requestId = ++searchRequestIdRef.current;
-    setSearchingLocations(true);
-    setLocationPickerError('');
-
-    const timeoutId = setTimeout(() => {
-      searchLocations(trimmedQuery)
-        .then(results => {
-          if (searchRequestIdRef.current !== requestId) {
-            return;
-          }
-
-          setLocationSearchResults(results);
-          if (!results.length) {
-            setLocationPickerError(t('vehicleAddLocationSearchEmpty'));
-          }
-        })
-        .catch((error: any) => {
-          if (searchRequestIdRef.current !== requestId) {
-            return;
-          }
-
-          setLocationSearchResults([]);
-          setLocationPickerError(
-            error?.message ?? t('vehicleAddLocationSearchError'),
-          );
-        })
-        .finally(() => {
-          if (searchRequestIdRef.current === requestId) {
-            setSearchingLocations(false);
-          }
-        });
-    }, 320);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [isLocationPickerVisible, locationSearchQuery, t]);
-
-  const syncAddressForLocation = async (
-    location: VehicleLocationValue,
-    target: 'draft' | 'picker',
-  ) => {
-    const requestId = ++reverseRequestIdRef.current;
-    setResolvingAddress(true);
-    setLocationPickerError('');
-
-    try {
-      const nextAddress = await reverseGeocodeLocation(location);
-      if (reverseRequestIdRef.current !== requestId) {
-        return;
-      }
-
-      if (target === 'draft') {
-        setSelectedLocationAddress(nextAddress);
-      } else {
-        setMapSelectionAddress(nextAddress);
-        skipNextSearchRef.current = true;
-        setLocationSearchQuery(nextAddress);
-        setLocationSearchResults([]);
-      }
-    } catch (error: any) {
-      if (reverseRequestIdRef.current !== requestId) {
-        return;
-      }
-
-      setLocationPickerError(
-        error?.message ?? t('vehicleAddLocationAddressError'),
-      );
-    } finally {
-      if (reverseRequestIdRef.current === requestId) {
-        setResolvingAddress(false);
-      }
-    }
-  };
-
-  const applyLocation = (
-    location: VehicleLocationValue | null,
-    address: string = '',
-  ) => {
-    setDraft(current => ({
-      ...current,
-      lat: location?.lat ?? '',
-      lng: location?.lng ?? '',
-    }));
-    setSelectedLocationAddress(location ? address : '');
-  };
-
-  const handleMapPress = (event: MapPressEvent) => {
-    const { latitude, longitude } = event.nativeEvent.coordinate;
-    const nextLocation = {
-      lat: latitude.toFixed(6),
-      lng: longitude.toFixed(6),
-    };
-    setMapSelection(nextLocation);
-    syncAddressForLocation(nextLocation, 'picker');
-  };
-
-  const handleMarkerDragEnd = (event: MarkerDragStartEndEvent) => {
-    const { latitude, longitude } = event.nativeEvent.coordinate;
-    const nextLocation = {
-      lat: latitude.toFixed(6),
-      lng: longitude.toFixed(6),
-    };
-    setMapSelection(nextLocation);
-    syncAddressForLocation(nextLocation, 'picker');
+    setCurrentStep(current => Math.min(current + 1, steps.length - 1));
   };
 
   const handleSubmit = async () => {
     setDidAttemptSubmit(true);
+    markStepTouched(steps.flatMap(step => step.fields));
 
     if (hasValidationErrors || isSubmitting) {
       return;
@@ -454,12 +240,79 @@ export function AddVehicleScreen({
     await onSubmit(draft);
   };
 
+  const renderStepChip = (step: VehicleStepDefinition, index: number) => {
+    const isActive = currentStep === index;
+    const isComplete = currentStep > index;
+    const stepDotStyle = {
+      backgroundColor:
+        isActive || isComplete ? palette.accentStrong : 'transparent',
+      borderColor:
+        isActive || isComplete ? palette.accentStrong : palette.border,
+    };
+
+    return (
+      <Pressable
+        key={step.key}
+        onPress={() => {
+          if (index <= currentStep) {
+            setCurrentStep(index);
+          }
+        }}
+        style={[
+          styles.stepChip,
+          {
+            backgroundColor: isActive ? palette.accentSoft : palette.surface,
+            borderColor:
+              isActive || isComplete ? palette.accentSoftBorder : palette.border,
+          },
+        ]}
+      >
+        <View
+        style={[
+          styles.stepDot,
+          stepDotStyle,
+        ]}
+      />
+        <AppText
+          style={[
+            styles.stepLabel,
+            {
+              color:
+                isActive || isComplete ? palette.accentStrong : palette.muted,
+            },
+          ]}
+        >
+          {step.label}
+        </AppText>
+      </Pressable>
+    );
+  };
+
+  const currentStepDefinition = steps[currentStep];
+
   return (
     <ScrollView
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      <AppBackButton onPress={onBack} label={t('vehicleAddBackButton')} />
+      <View style={styles.headerBar}>
+        <AppBackButton onPress={onBack} label={t('vehicleAddBackButton')} />
+        {isEditMode && onOpenActionMenu ? (
+          <Pressable
+            onPress={onOpenActionMenu}
+            style={[
+              styles.moreButton,
+              {
+                backgroundColor: palette.surface,
+                borderColor: palette.border,
+                shadowColor: palette.shadow,
+              },
+            ]}
+          >
+            <AppIcon name="more" size={20} color={palette.accentStrong} />
+          </Pressable>
+        ) : null}
+      </View>
 
       <View
         style={[
@@ -472,10 +325,10 @@ export function AddVehicleScreen({
         ]}
       >
         <AppText style={[styles.heroTitle, { color: palette.text }]}>
-          {t('vehicleAddTitle')}
+          {headerTitle}
         </AppText>
         <AppText style={[styles.heroSubtitle, { color: palette.muted }]}>
-          {t('vehicleAddSubtitle')}
+          {headerSubtitle}
         </AppText>
         <View
           style={[
@@ -487,382 +340,248 @@ export function AddVehicleScreen({
           ]}
         >
           <AppText style={[styles.reviewChipText, { color: palette.accentStrong }]}>
-            {t('vehiclePendingReviewStatus')}
+            {reviewChipLabel}
           </AppText>
         </View>
       </View>
 
-      <VehicleSectionCard
-        title={t('vehicleAddSectionVehicle')}
-        subtitle={t('vehicleAddSectionVehicleSubtitle')}
-      >
-        <View style={styles.stack}>
-          <AppInput
-            value={draft.vehicleNumber}
-            onChangeText={value => updateField('vehicleNumber', value)}
-            onBlur={() => markTouched('vehicleNumber')}
-            placeholder={t('vehicleAddNumberPlaceholder')}
-            hasError={shouldShowFieldError('vehicleNumber')}
-          />
-          <AppFieldMessage
-            message={
-              shouldShowFieldError('vehicleNumber')
-                ? validationErrors.vehicleNumber
-                : null
-            }
-          />
-          <AppInput
-            value={draft.name}
-            onChangeText={value => updateField('name', value)}
-            onBlur={() => markTouched('name')}
-            placeholder={t('vehicleAddNamePlaceholder')}
-            hasError={shouldShowFieldError('name')}
-          />
-          <AppFieldMessage
-            message={shouldShowFieldError('name') ? validationErrors.name : null}
-          />
-        </View>
-      </VehicleSectionCard>
+      <View style={styles.stepRow}>{steps.map(renderStepChip)}</View>
 
       <VehicleSectionCard
-        title={t('vehicleAddSectionContact')}
-        subtitle={t('vehicleAddSectionContactSubtitle')}
+        title={currentStepDefinition.title}
+        subtitle={currentStepDefinition.subtitle}
       >
-        <View style={styles.stack}>
-          <AppInput
-            value={draft.phone}
-            onChangeText={value => updateField('phone', value)}
-            onBlur={() => markTouched('phone')}
-            placeholder={t('vehicleAddPhonePlaceholder')}
-            keyboardType="phone-pad"
-            hasError={shouldShowFieldError('phone')}
-          />
-          <AppFieldMessage
-            message={shouldShowFieldError('phone') ? validationErrors.phone : null}
-          />
-          <AppInput
-            value={draft.email}
-            onChangeText={value => updateField('email', value)}
-            onBlur={() => markTouched('email')}
-            placeholder="Vehicle driver email (optional)"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            hasError={shouldShowFieldError('email')}
-          />
-          <AppFieldMessage
-            message={shouldShowFieldError('email') ? validationErrors.email : null}
-          />
-        </View>
-      </VehicleSectionCard>
+        {currentStepDefinition.key === 'vehicle' ? (
+          <View style={styles.stack}>
+            <AppInput
+              value={draft.name}
+              onChangeText={value => updateField('name', value)}
+              onBlur={() => markTouched('name')}
+              placeholder={t('vehicleAddNamePlaceholder')}
+              hasError={shouldShowFieldError('name')}
+            />
+            <AppFieldMessage
+              message={shouldShowFieldError('name') ? validationErrors.name : null}
+            />
+            <View style={styles.doubleFieldRow}>
+              <View style={styles.doubleFieldCell}>
+                <AppInput
+                  value={draft.vehicleNumber}
+                  onChangeText={value => updateField('vehicleNumber', value)}
+                  onBlur={() => markTouched('vehicleNumber')}
+                  placeholder={t('vehicleAddNumberPlaceholder')}
+                  hasError={shouldShowFieldError('vehicleNumber')}
+                />
+                <AppFieldMessage
+                  message={
+                    shouldShowFieldError('vehicleNumber')
+                      ? validationErrors.vehicleNumber
+                      : null
+                  }
+                />
+              </View>
+              <View style={styles.doubleFieldCell}>
+                <AppInput
+                  value={draft.capacity}
+                  onChangeText={value => updateField('capacity', value)}
+                  onBlur={() => markTouched('capacity')}
+                  placeholder="Vehicle load capacity"
+                  hasError={shouldShowFieldError('capacity')}
+                />
+                <AppFieldMessage
+                  message={
+                    shouldShowFieldError('capacity')
+                      ? validationErrors.capacity
+                      : null
+                  }
+                />
+              </View>
+            </View>
+          </View>
+        ) : null}
 
-      <VehicleSectionCard
-        title="Vehicle capacity and licence"
-        subtitle="Capture the load capacity and the driver licence number for review."
-      >
-        <View style={styles.stack}>
-          <AppInput
-            value={draft.capacity}
-            onChangeText={value => updateField('capacity', value)}
-            onBlur={() => markTouched('capacity')}
-            placeholder="Vehicle load capacity"
-            hasError={shouldShowFieldError('capacity')}
-          />
-          <AppFieldMessage
-            message={
-              shouldShowFieldError('capacity') ? validationErrors.capacity : null
-            }
-          />
-          <AppInput
-            value={draft.driverLicenseNumber}
-            onChangeText={value => updateField('driverLicenseNumber', value)}
-            onBlur={() => markTouched('driverLicenseNumber')}
-            placeholder="Vehicle driver licence number"
-            hasError={shouldShowFieldError('driverLicenseNumber')}
-          />
-          <AppFieldMessage
-            message={
-              shouldShowFieldError('driverLicenseNumber')
-                ? validationErrors.driverLicenseNumber
-                : null
-            }
-          />
-        </View>
-      </VehicleSectionCard>
+        {currentStepDefinition.key === 'driver' ? (
+          <View style={styles.stack}>
+            <AppInput
+              value={draft.driverName}
+              onChangeText={value => updateField('driverName', value)}
+              onBlur={() => markTouched('driverName')}
+              placeholder="Assigned driver name"
+              hasError={shouldShowFieldError('driverName')}
+            />
+            <AppFieldMessage
+              message={
+                shouldShowFieldError('driverName')
+                  ? validationErrors.driverName
+                  : null
+              }
+            />
+            <AppInput
+              value={draft.phone}
+              onChangeText={value => updateField('phone', value)}
+              onBlur={() => markTouched('phone')}
+              placeholder={t('vehicleAddPhonePlaceholder')}
+              keyboardType="phone-pad"
+              hasError={shouldShowFieldError('phone')}
+            />
+            <AppFieldMessage
+              message={shouldShowFieldError('phone') ? validationErrors.phone : null}
+            />
+            <AppInput
+              value={draft.email}
+              onChangeText={value => updateField('email', value)}
+              onBlur={() => markTouched('email')}
+              placeholder="Vehicle driver email (optional)"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              hasError={shouldShowFieldError('email')}
+            />
+            <AppFieldMessage
+              message={shouldShowFieldError('email') ? validationErrors.email : null}
+            />
+            <AppInput
+              value={draft.driverLicenseNumber}
+              onChangeText={value => updateField('driverLicenseNumber', value)}
+              onBlur={() => markTouched('driverLicenseNumber')}
+              placeholder="Vehicle driver licence number"
+              hasError={shouldShowFieldError('driverLicenseNumber')}
+            />
+            <AppFieldMessage
+              message={
+                shouldShowFieldError('driverLicenseNumber')
+                  ? validationErrors.driverLicenseNumber
+                  : null
+              }
+            />
+          </View>
+        ) : null}
 
-      <VehicleSectionCard
-        title={t('vehicleAddSectionLocation')}
-        subtitle={t('vehicleAddSectionLocationSubtitle')}
-      >
-        <View style={styles.stack}>
-          <View
-            style={[
-              styles.locationSummaryCard,
-              {
-                backgroundColor: palette.surfaceSoft,
-                borderColor: palette.border,
-              },
-            ]}
-          >
-            <View style={styles.locationSummaryHeader}>
-              <AppText style={[styles.locationSummaryLabel, { color: palette.muted }]}>
-                {t('vehicleAddLocationPickerLabel')}
+        {currentStepDefinition.key === 'review' ? (
+          <View style={styles.stack}>
+            <View
+              style={[
+                styles.reviewCard,
+                {
+                  backgroundColor: palette.surfaceSoft,
+                  borderColor: palette.border,
+                },
+              ]}
+            >
+              <View style={styles.reviewRow}>
+                <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
+                  Vehicle
+                </AppText>
+                <AppText style={[styles.reviewValue, { color: palette.text }]}>
+                  {draft.name || 'Not entered'}
+                </AppText>
+              </View>
+              <View style={styles.reviewRow}>
+                <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
+                  Vehicle number
+                </AppText>
+                <AppText style={[styles.reviewValue, { color: palette.text }]}>
+                  {draft.vehicleNumber || 'Not entered'}
+                </AppText>
+              </View>
+              <View style={styles.reviewRow}>
+                <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
+                  Capacity
+                </AppText>
+                <AppText style={[styles.reviewValue, { color: palette.text }]}>
+                  {draft.capacity || 'Not entered'}
+                </AppText>
+              </View>
+              <View style={styles.reviewRow}>
+                <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
+                  Driver
+                </AppText>
+                <AppText style={[styles.reviewValue, { color: palette.text }]}>
+                  {draft.driverName || 'Not entered'}
+                </AppText>
+              </View>
+              <View style={styles.reviewRow}>
+                <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
+                  Driver contact
+                </AppText>
+                <AppText style={[styles.reviewValue, { color: palette.text }]}>
+                  {[draft.phone, draft.email].filter(Boolean).join(' • ') || 'Not entered'}
+                </AppText>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.locationSummaryCard,
+                {
+                  backgroundColor: palette.accentSoft,
+                  borderColor: palette.accentSoftBorder,
+                },
+              ]}
+            >
+              <AppText style={[styles.locationSummaryLabel, { color: palette.accentStrong }]}>
+                Vehicle location
               </AppText>
-              <AppText
-                style={[styles.locationOptionalLabel, { color: palette.accentStrong }]}
-              >
-                {t('vehicleAddLocationOptionalLabel')}
+              <AppText style={[styles.locationSummaryValue, { color: palette.text }]}>
+                Supplier default dispatch location
+              </AppText>
+              <AppText style={[styles.locationSummaryHint, { color: palette.muted }]}>
+                Vehicle-specific location capture is not needed right now. We will send the
+                supplier default location in the API request.
+              </AppText>
+              <AppText style={[styles.locationCoordinates, { color: palette.accentStrong }]}>
+                {supplierLocationLabel}
               </AppText>
             </View>
-            <AppText style={[styles.locationSummaryValue, { color: palette.text }]}>
-              {selectedLocation
-                ? formatLocationValue(selectedLocation)
-                : t('vehicleAddLocationEmptyState')}
+
+            <AppText style={[styles.noteText, { color: palette.muted }]}>
+              {isEditMode
+                ? 'Save the updated fleet card details when everything looks right.'
+                : t('vehicleAddReviewNote')}
             </AppText>
-            {selectedLocationAddress ? (
-              <AppText style={[styles.locationAddressValue, { color: palette.text }]}>
-                {selectedLocationAddress}
-              </AppText>
-            ) : null}
-            <AppText style={[styles.locationSummaryHint, { color: palette.muted }]}>
-              {selectedLocation
-                ? t('vehicleAddLocationSelectedHint')
-                : suggestedLocation
-                  ? t('vehicleAddSupplierLocationHint')
-                  : t('vehicleAddLocationEmptyHint')}
-            </AppText>
+
+            <AppFieldMessage
+              message={
+                didAttemptSubmit && hasValidationErrors
+                  ? 'Please fix the highlighted fields before continuing.'
+                  : submitErrorMessage
+              }
+            />
           </View>
-
-          <AppButton
-            title={t('vehicleAddLocationPickerButton')}
-            onPress={() => setLocationPickerVisible(true)}
-            disabled={isSubmitting}
-            style={[
-              styles.locationActionButton,
-              {
-                backgroundColor: palette.accentSoft,
-                borderColor: palette.accentSoftBorder,
-              },
-            ]}
-            textStyle={{ color: palette.accentStrong }}
-          />
-
-          {suggestedLocation ? (
-            <AppButton
-              title={t('vehicleAddUseSupplierLocationButton')}
-              onPress={() => {
-                applyLocation(suggestedLocation);
-                syncAddressForLocation(suggestedLocation, 'draft');
-              }}
-              disabled={isSubmitting}
-              style={styles.locationUtilityButton}
-              textStyle={{ color: palette.accentStrong }}
-            />
-          ) : null}
-
-          {selectedLocation ? (
-            <AppButton
-              title={t('vehicleAddClearLocationButton')}
-              onPress={() => applyLocation(null)}
-              disabled={isSubmitting}
-              variant="ghost"
-              style={styles.locationUtilityButton}
-              textStyle={{ color: palette.muted }}
-            />
-          ) : null}
-        </View>
+        ) : null}
       </VehicleSectionCard>
 
-      <VehicleSectionCard
-        title={t('vehicleAddReviewTitle')}
-        subtitle={t('vehicleAddReviewSubtitle')}
-      >
-        <View style={styles.stack}>
-          <AppText style={[styles.noteText, { color: palette.muted }]}>
-            {t('vehicleAddReviewNote')}
-          </AppText>
-          <AppFieldMessage
-            message={
-              didAttemptSubmit && hasValidationErrors
-                ? 'Please fix the highlighted fields before submitting for review.'
-                : submitErrorMessage
-            }
-          />
+      <View style={styles.footerActions}>
+        {currentStep > 0 ? (
           <AppButton
-            title={t('vehicleAddSubmitButton')}
+            title="Previous"
+            onPress={() => setCurrentStep(current => Math.max(0, current - 1))}
+            disabled={isSubmitting}
+            style={styles.secondaryAction}
+            textStyle={{ color: palette.accentStrong }}
+          />
+        ) : (
+          <View style={styles.actionSpacer} />
+        )}
+
+        {currentStep < steps.length - 1 ? (
+          <AppButton
+            title="Next"
+            onPress={handleNextStep}
+            disabled={isSubmitting}
+            style={styles.primaryAction}
+            textStyle={styles.primaryActionText}
+          />
+        ) : (
+          <AppButton
+            title={isEditMode ? 'Save vehicle changes' : t('vehicleAddSubmitButton')}
             onPress={handleSubmit}
             disabled={isSubmitting}
             loading={isSubmitting}
-            style={styles.submitButton}
-            textStyle={styles.submitButtonText}
+            style={styles.primaryAction}
+            textStyle={styles.primaryActionText}
           />
-        </View>
-      </VehicleSectionCard>
-
-      <Modal
-        visible={isLocationPickerVisible}
-        animationType="slide"
-        onRequestClose={() => setLocationPickerVisible(false)}
-      >
-        <View
-          style={[
-            styles.mapPickerScreen,
-            { backgroundColor: palette.background },
-          ]}
-        >
-          <AppBackButton
-            onPress={() => setLocationPickerVisible(false)}
-            style={styles.mapPickerBackButton}
-          />
-          <AppText style={[styles.mapPickerTitle, { color: palette.text }]}>
-            {t('vehicleAddLocationPickerTitle')}
-          </AppText>
-          <AppText style={[styles.mapPickerSubtitle, { color: palette.muted }]}>
-            {t('vehicleAddLocationPickerSubtitle')}
-          </AppText>
-
-          <View
-            style={[
-              styles.mapSearchCard,
-              {
-                backgroundColor: palette.surface,
-                borderColor: palette.border,
-              },
-            ]}
-          >
-            <AppText style={[styles.locationSummaryLabel, { color: palette.muted }]}>
-              {t('vehicleAddLocationSearchLabel')}
-            </AppText>
-            <AppInput
-              value={locationSearchQuery}
-              onChangeText={setLocationSearchQuery}
-              placeholder={t('vehicleAddLocationSearchPlaceholder')}
-              editable={!isSubmitting}
-            />
-            {isSearchingLocations ? (
-              <View style={styles.searchLoadingRow}>
-                <AppWaterLoader size={18} />
-                <AppText style={[styles.searchLoadingText, { color: palette.muted }]}>
-                  {t('vehicleAddLocationSearchingLabel')}
-                </AppText>
-              </View>
-            ) : null}
-            {locationSearchResults.length ? (
-              <View
-                style={[
-                  styles.searchResultsCard,
-                  {
-                    backgroundColor: palette.surfaceSoft,
-                    borderColor: palette.border,
-                  },
-                ]}
-              >
-                {locationSearchResults.map(result => (
-                  <Pressable
-                    key={result.id}
-                    onPress={() => {
-                      setMapSelection(result);
-                      setMapSelectionAddress(result.subtitle);
-                      skipNextSearchRef.current = true;
-                      setLocationSearchQuery(result.subtitle);
-                      setLocationSearchResults([]);
-                      setLocationPickerError('');
-                      mapRef.current?.animateToRegion(getMapRegion(result), 260);
-                    }}
-                    style={({ pressed }) => [
-                      styles.searchResultRow,
-                      {
-                        borderBottomColor: palette.border,
-                        backgroundColor: pressed ? palette.accentSoft : 'transparent',
-                      },
-                    ]}
-                  >
-                    <AppText style={[styles.searchResultTitle, { color: palette.text }]}>
-                      {result.title}
-                    </AppText>
-                    <AppText style={[styles.searchResultSubtitle, { color: palette.muted }]}>
-                      {result.subtitle}
-                    </AppText>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-          </View>
-
-          <View
-            style={[
-              styles.mapCard,
-              {
-                backgroundColor: palette.surface,
-                borderColor: palette.border,
-                shadowColor: palette.shadow,
-              },
-            ]}
-          >
-            <MapView
-              ref={ref => {
-                mapRef.current = ref;
-              }}
-              initialRegion={mapInitialRegion}
-              onPress={handleMapPress}
-              style={styles.map}
-            >
-              {mapSelection ? (
-                <Marker
-                  coordinate={{
-                    latitude: Number(mapSelection.lat),
-                    longitude: Number(mapSelection.lng),
-                  }}
-                  draggable
-                  onDragEnd={handleMarkerDragEnd}
-                />
-              ) : null}
-            </MapView>
-          </View>
-
-          <View
-            style={[
-              styles.mapSelectionCard,
-              {
-                backgroundColor: palette.surface,
-                borderColor: palette.border,
-              },
-            ]}
-          >
-            <AppText style={[styles.locationSummaryLabel, { color: palette.muted }]}>
-              {t('vehicleAddLocationAddressBarLabel')}
-            </AppText>
-            <AppText style={[styles.mapSelectionValue, { color: palette.text }]}>
-              {mapSelectionAddress || t('vehicleAddLocationEmptyState')}
-            </AppText>
-            {mapSelection ? (
-              <AppText style={[styles.mapSelectionCoordinates, { color: palette.muted }]}>
-                {formatLocationValue(mapSelection)}
-              </AppText>
-            ) : null}
-          </View>
-
-          <AppFieldMessage message={locationPickerError} />
-          {isResolvingAddress ? (
-            <View style={styles.searchLoadingRow}>
-              <AppWaterLoader size={18} />
-              <AppText style={[styles.searchLoadingText, { color: palette.muted }]}>
-                {t('vehicleAddLocationResolvingLabel')}
-              </AppText>
-            </View>
-          ) : null}
-
-          <AppButton
-            title={t('vehicleAddLocationPickerConfirm')}
-            onPress={() => {
-              applyLocation(mapSelection, mapSelectionAddress);
-              setLocationPickerVisible(false);
-            }}
-            disabled={!mapSelection || isSubmitting}
-            style={styles.submitButton}
-            textStyle={styles.submitButtonText}
-          />
-        </View>
-      </Modal>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -872,6 +591,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 32,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  moreButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    elevation: 4,
   },
   heroCard: {
     borderWidth: 1,
@@ -907,8 +647,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  stepRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  stepChip: {
+    flex: 1,
+    minHeight: 54,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  stepDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  stepLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
   stack: {
     gap: 12,
+  },
+  doubleFieldRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  doubleFieldCell: {
+    flex: 1,
+  },
+  reviewCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  reviewLabel: {
+    flex: 1,
+    fontSize: 13,
+  },
+  reviewValue: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'right',
   },
   locationSummaryCard: {
     borderWidth: 1,
@@ -916,137 +711,46 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 6,
   },
-  locationSummaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
   locationSummaryLabel: {
     fontSize: 13,
-    fontWeight: '700',
-  },
-  locationOptionalLabel: {
-    fontSize: 12,
     fontWeight: '800',
   },
   locationSummaryValue: {
     fontSize: 18,
     fontWeight: '800',
   },
-  locationAddressValue: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
   locationSummaryHint: {
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 20,
   },
-  locationActionButton: {
-    borderWidth: 1,
-    borderRadius: 18,
-  },
-  locationUtilityButton: {
-    borderRadius: 18,
+  locationCoordinates: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   noteText: {
     fontSize: 14,
     lineHeight: 21,
   },
-  mapPickerScreen: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 24,
-  },
-  mapPickerBackButton: {
-    marginBottom: 14,
-  },
-  mapPickerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  mapPickerSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  mapSearchCard: {
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 16,
-    gap: 10,
-    marginBottom: 14,
-  },
-  mapCard: {
-    flex: 1,
-    minHeight: 320,
-    borderWidth: 1,
-    borderRadius: 28,
-    overflow: 'hidden',
-    marginBottom: 16,
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    elevation: 5,
-  },
-  map: {
-    flex: 1,
-  },
-  mapSelectionCard: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    gap: 4,
-  },
-  mapSelectionValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 22,
-  },
-  mapSelectionCoordinates: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  searchLoadingRow: {
+  footerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  searchLoadingText: {
-    fontSize: 13,
-  },
-  searchResultsCard: {
-    borderWidth: 1,
+  secondaryAction: {
+    flex: 1,
     borderRadius: 18,
-    overflow: 'hidden',
   },
-  searchResultRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  searchResultTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  searchResultSubtitle: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  submitButton: {
+  primaryAction: {
+    flex: 1,
     backgroundColor: '#0284C7',
     borderColor: '#0284C7',
     borderRadius: 18,
   },
-  submitButtonText: {
+  primaryActionText: {
     color: '#FFFFFF',
     fontWeight: '800',
+  },
+  actionSpacer: {
+    flex: 1,
   },
 });
