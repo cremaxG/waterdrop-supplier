@@ -112,11 +112,13 @@ export function SignInScreen({ onSignIn }: SignInScreenProps) {
                     backgroundColor: phoneNumber ? theme.border : theme.card,
                   },
                 ]}
+                leftIconName="check"
               />
               <AppButton
                 i18nKey="usePasswordButton"
                 onPress={handleUsePassword}
                 style={[styles.button, styles.secondaryButton]}
+                leftIconName="eye"
               />
             </View>
           </View>

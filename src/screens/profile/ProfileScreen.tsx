@@ -140,37 +140,33 @@ export function ProfileScreen({
       {
         key: 'overview',
         icon: 'dashboard',
-        label: 'Overview',
-        title: 'Business overview',
-        subtitle:
-          'See the supplier identity, compliance details, and primary dispatch address in one place.',
+        label: t('profileStepOverview'),
+        title: t('profileStepOverviewTitle'),
+        subtitle: t('profileStepOverviewSubtitle'),
       },
       {
         key: 'operations',
         icon: 'route',
-        label: 'Ops',
-        title: 'Operations and fleet',
-        subtitle:
-          'Jump into day-to-day controls for business settings, vehicles, products, and alerts.',
+        label: t('profileStepOperations'),
+        title: t('profileStepOperationsTitle'),
+        subtitle: t('profileStepOperationsSubtitle'),
       },
       {
         key: 'resources',
         icon: 'package',
-        label: 'Resources',
-        title: 'Orders and resources',
-        subtitle:
-          'Navigate quickly to addresses, orders, reviews, favourites, discounts, and media.',
+        label: t('profileStepResources'),
+        title: t('profileStepResourcesTitle'),
+        subtitle: t('profileStepResourcesSubtitle'),
       },
       {
         key: 'account',
         icon: 'user',
-        label: 'Account',
-        title: 'Account and preferences',
-        subtitle:
-          'Manage payouts, support, language, theme, and logout actions from one section.',
+        label: t('profileStepAccount'),
+        title: t('profileStepAccountTitle'),
+        subtitle: t('profileStepAccountSubtitle'),
       },
     ],
-    [],
+    [t],
   );
 
   const loadProfile = useCallback(async () => {
@@ -312,12 +308,12 @@ export function ProfileScreen({
               />
               <ProfileDetailRow
                 icon="route"
-                label="Supplier location"
+                label={t('profileSupplierLocationLabel')}
                 value={profileCoordinates}
               />
               <ProfileDetailRow
                 icon="clock"
-                label="Last updated"
+                label={t('profileLastUpdatedLabel')}
                 value={profileUpdatedAt}
               />
               <ProfileActionRow
@@ -331,6 +327,7 @@ export function ProfileScreen({
                 onPress={openSupportCall}
                 variant="primary"
                 style={styles.supportButton}
+                leftIconName="phone"
               />
             </View>
           </ProfileCard>
@@ -355,8 +352,12 @@ export function ProfileScreen({
               />
               <ProfileDetailRow
                 icon="shield"
-                label="Verification status"
-                value={profile.verified ? t('profileVerifiedBadge') : 'Pending verification'}
+                label={t('profileVerificationStatusLabel')}
+                value={
+                  profile.verified
+                    ? t('profileVerifiedBadge')
+                    : t('profileVerificationPending')
+                }
               />
               <ProfileActionRow
                 icon="vehicles"
@@ -479,6 +480,7 @@ export function ProfileScreen({
                     styles.supportButtonText,
                     { color: palette.accentStrong },
                   ]}
+                  leftIconName="phone"
                 />
               </View>
             </ProfileCard>
@@ -509,6 +511,7 @@ export function ProfileScreen({
                 variant="danger"
                 style={styles.logoutButton}
                 textStyle={styles.logoutButtonText}
+                leftIconName="logout"
               />
             </ProfileCard>
           </>
@@ -589,6 +592,7 @@ export function ProfileScreen({
             onPress={retryFetchProfile}
             variant="primary"
             style={styles.retryButton}
+            leftIconName="retry"
           />
         </View>
       </AppRefreshScrollView>
@@ -622,6 +626,7 @@ export function ProfileScreen({
             onPress={retryFetchProfile}
             variant="primary"
             style={styles.retryButton}
+            leftIconName="retry"
           />
         </View>
       </AppRefreshScrollView>
@@ -674,10 +679,11 @@ export function ProfileScreen({
       <View style={styles.footerActions}>
         {currentStep > 0 ? (
           <AppButton
-            title="Previous"
+            title={t('commonPrevious')}
             onPress={() => setCurrentStep(step => Math.max(0, step - 1))}
             style={styles.secondaryAction}
             textStyle={{ color: palette.accentStrong }}
+            leftIconName="back"
           />
         ) : (
           <View style={styles.actionSpacer} />
@@ -685,19 +691,21 @@ export function ProfileScreen({
 
         {currentStep < steps.length - 1 ? (
           <AppButton
-            title="Next"
+            title={t('commonNext')}
             onPress={() =>
               setCurrentStep(step => Math.min(steps.length - 1, step + 1))
             }
             style={styles.primaryAction}
             textStyle={styles.primaryActionText}
+            rightIconName="chevron"
           />
         ) : (
           <AppButton
-            title="Back to overview"
+            title={t('profileBackToOverviewButton')}
             onPress={() => setCurrentStep(0)}
             style={styles.primaryAction}
             textStyle={styles.primaryActionText}
+            leftIconName="dashboard"
           />
         )}
       </View>

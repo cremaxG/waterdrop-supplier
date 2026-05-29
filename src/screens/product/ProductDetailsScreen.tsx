@@ -57,13 +57,21 @@ interface ProductDetailsScreenProps {
   onUpdateVehicleInventory: (vehicleId: string, nextQuantity: number) => void;
 }
 
-function getQuantityValidationMessage(value: string, label: string) {
+function getQuantityValidationMessage(
+  value: string,
+  kind: 'godown' | 'vehicle',
+  t: (key: string) => string,
+) {
   if (!value.trim()) {
-    return `${label} is required.`;
+    return kind === 'godown'
+      ? t('productValidationGodownRequired')
+      : t('productValidationVehicleQuantityRequired');
   }
 
   if (!/^\d+$/.test(value.trim())) {
-    return `Enter a valid whole number for ${label.toLowerCase()}.`;
+    return kind === 'godown'
+      ? t('productValidationGodownInvalid')
+      : t('productValidationVehicleQuantityInvalid');
   }
 
   return '';
@@ -98,7 +106,7 @@ export function ProductDetailsScreen({
       : Math.max(product.totalStock - product.godownInventory, 0);
 
   const handleGodownUpdate = () => {
-    const nextError = getQuantityValidationMessage(godownInput, 'Godown quantity');
+    const nextError = getQuantityValidationMessage(godownInput, 'godown', t);
     setGodownError(nextError);
 
     if (nextError) {
@@ -112,7 +120,7 @@ export function ProductDetailsScreen({
 
   const handleVehicleUpdate = (vehicleId: string) => {
     const rawValue = vehicleInputs[vehicleId] ?? '';
-    const nextError = getQuantityValidationMessage(rawValue, 'Vehicle quantity');
+    const nextError = getQuantityValidationMessage(rawValue, 'vehicle', t);
     setVehicleErrors(current => ({ ...current, [vehicleId]: nextError }));
 
     if (nextError) {
@@ -178,7 +186,8 @@ export function ProductDetailsScreen({
               {product.name}
             </AppText>
             <AppText style={[styles.heroMeta, { color: palette.muted }]}>
-              {product.sku || 'Product SKU pending'} • {product.category || 'General'}
+              {product.sku || t('productSkuPending')} •{' '}
+              {product.category || t('productCategoryFallback')}
             </AppText>
           </View>
         </View>
@@ -247,7 +256,7 @@ export function ProductDetailsScreen({
                 {item.label}
               </AppText>
               <AppText style={[styles.detailValue, { color: palette.text }]}>
-                {item.value || '—'}
+                {item.value || t('commonNotAvailable')}
               </AppText>
             </View>
           ))}
@@ -264,7 +273,7 @@ export function ProductDetailsScreen({
             onChangeText={value => {
               setGodownInput(value);
               if (godownError) {
-                setGodownError(getQuantityValidationMessage(value, 'Godown quantity'));
+                setGodownError(getQuantityValidationMessage(value, 'godown', t));
               }
             }}
             keyboardType="number-pad"
@@ -277,6 +286,7 @@ export function ProductDetailsScreen({
             onPress={handleGodownUpdate}
             style={styles.primaryButton}
             textStyle={styles.primaryButtonText}
+            leftIconName="save"
           />
         </View>
       </VehicleSectionCard>
@@ -328,7 +338,8 @@ export function ProductDetailsScreen({
                           ...current,
                           [item.id]: getQuantityValidationMessage(
                             value,
-                            'Vehicle quantity',
+                            'vehicle',
+                            t,
                           ),
                         }));
                       }
@@ -344,6 +355,7 @@ export function ProductDetailsScreen({
                   onPress={() => handleVehicleUpdate(item.id)}
                   style={styles.secondaryButton}
                   textStyle={styles.secondaryButtonText}
+                  leftIconName="save"
                 />
               </View>
             </View>
@@ -353,14 +365,15 @@ export function ProductDetailsScreen({
 
       {onEdit ? (
         <VehicleSectionCard
-          title="Product actions"
-          subtitle="Jump into edit mode or continue managing stock from here."
+          title={t('productActionsCardTitle')}
+          subtitle={t('productActionsCardSubtitle')}
         >
           <AppButton
-            title="Edit product"
+            title={t('productEditButton')}
             onPress={onEdit}
             style={styles.primaryButton}
             textStyle={styles.primaryButtonText}
+            leftIconName="edit"
           />
         </VehicleSectionCard>
       ) : null}

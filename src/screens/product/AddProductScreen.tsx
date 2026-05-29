@@ -74,33 +74,36 @@ function buildInitialDraft(initialDraft?: Partial<NewProductDraft> | null): NewP
   };
 }
 
-function getProductValidationErrors(draft: NewProductDraft) {
+function getProductValidationErrors(
+  draft: NewProductDraft,
+  t: (key: string) => string,
+) {
   return {
-    name: !draft.name.trim() ? 'Product name is required.' : '',
-    sku: !draft.sku.trim() ? 'SKU or internal code is required.' : '',
-    category: !draft.category.trim() ? 'Category is required.' : '',
-    type: !draft.type.trim() ? 'Product type is required.' : '',
-    unitLabel: !draft.unitLabel.trim() ? 'Unit label is required.' : '',
+    name: !draft.name.trim() ? t('productValidationNameRequired') : '',
+    sku: !draft.sku.trim() ? t('productValidationSkuRequired') : '',
+    category: !draft.category.trim() ? t('productValidationCategoryRequired') : '',
+    type: !draft.type.trim() ? t('productValidationTypeRequired') : '',
+    unitLabel: !draft.unitLabel.trim() ? t('productValidationUnitRequired') : '',
     price: !draft.price.trim()
-      ? 'Price per unit is required.'
+      ? t('productValidationPriceRequired')
       : !isPositiveNumber(draft.price.trim())
-        ? 'Enter a valid price greater than 0.'
+        ? t('productValidationPriceInvalid')
         : '',
     godownInventory: !draft.godownInventory.trim()
-      ? 'Godown inventory is required.'
+      ? t('productValidationGodownRequired')
       : !isNonNegativeWholeNumber(draft.godownInventory)
-        ? 'Enter a valid whole number for godown inventory.'
+        ? t('productValidationGodownInvalid')
         : '',
-    demand: !draft.demand.trim() ? 'Demand indicator is required.' : '',
+    demand: !draft.demand.trim() ? t('productValidationDemandRequired') : '',
     reorderLevel: !draft.reorderLevel.trim()
-      ? 'Reorder level is required.'
+      ? t('productValidationReorderRequired')
       : !isNonNegativeWholeNumber(draft.reorderLevel)
-        ? 'Enter a valid whole number for reorder level.'
+        ? t('productValidationReorderInvalid')
         : '',
     description: !draft.description.trim()
-      ? 'Product description is required.'
+      ? t('productValidationDescriptionRequired')
       : draft.description.trim().length < 10
-        ? 'Enter a more descriptive product summary.'
+        ? t('productValidationDescriptionShort')
         : '',
   } satisfies Record<ProductField, string>;
 }
@@ -132,7 +135,10 @@ export function AddProductScreen({
     setCurrentStep(0);
   }, [initialDraft, mode]);
 
-  const validationErrors = useMemo(() => getProductValidationErrors(draft), [draft]);
+  const validationErrors = useMemo(
+    () => getProductValidationErrors(draft, t),
+    [draft, t],
+  );
   const hasValidationErrors = useMemo(
     () => Object.values(validationErrors).some(Boolean),
     [validationErrors],
@@ -142,24 +148,24 @@ export function AddProductScreen({
     () => [
       {
         key: 'basic',
-        label: 'Product',
+        label: t('productStepProduct'),
         title: t('productAddBasicTitle'),
         subtitle: t('productAddBasicSubtitle'),
         fields: ['name', 'sku', 'category', 'type', 'unitLabel', 'price'],
       },
       {
         key: 'inventory',
-        label: 'Inventory',
+        label: t('productStepInventory'),
         title: t('productAddInventoryTitle'),
         subtitle: t('productAddInventorySubtitle'),
         fields: ['godownInventory', 'reorderLevel', 'demand'],
       },
       {
         key: 'review',
-        label: 'Review',
-        title: isEditMode ? 'Review product updates' : t('productAddDescriptionTitle'),
+        label: t('productStepReview'),
+        title: isEditMode ? t('productEditReviewTitle') : t('productAddDescriptionTitle'),
         subtitle: isEditMode
-          ? 'Check the updated product information before saving.'
+          ? t('productEditReviewSubtitle')
           : t('productAddDescriptionSubtitle'),
         fields: ['description'],
       },
@@ -325,11 +331,11 @@ export function AddProductScreen({
         ]}
       >
         <AppText style={[styles.heroTitle, { color: palette.text }]}>
-          {isEditMode ? 'Edit product' : t('productAddTitle')}
+          {isEditMode ? t('productEditTitle') : t('productAddTitle')}
         </AppText>
         <AppText style={[styles.heroSubtitle, { color: palette.muted }]}>
           {isEditMode
-            ? 'Update product identity, stock details, and review information step by step.'
+            ? t('productEditSubtitle')
             : t('productAddSubtitle')}
         </AppText>
       </View>
@@ -495,13 +501,19 @@ export function AddProductScreen({
               ]}
             >
               {[
-                ['Product', draft.name || 'Not entered'],
-                ['SKU', draft.sku || 'Not entered'],
-                ['Category', draft.category || 'Not entered'],
-                ['Type', draft.type || 'Not entered'],
-                ['Price', draft.price || 'Not entered'],
-                ['Godown stock', draft.godownInventory || 'Not entered'],
-                ['Reorder level', draft.reorderLevel || 'Not entered'],
+                [t('productStepProduct'), draft.name || t('commonNotEntered')],
+                [t('productSkuLabel'), draft.sku || t('commonNotEntered')],
+                [t('productCategoryLabel'), draft.category || t('commonNotEntered')],
+                [t('productAddTypePlaceholder'), draft.type || t('commonNotEntered')],
+                [t('productReviewPriceLabel'), draft.price || t('commonNotEntered')],
+                [
+                  t('productReviewGodownLabel'),
+                  draft.godownInventory || t('commonNotEntered'),
+                ],
+                [
+                  t('productReorderLevelLabel'),
+                  draft.reorderLevel || t('commonNotEntered'),
+                ],
               ].map(([label, value]) => (
                 <View key={label} style={styles.reviewRow}>
                   <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
@@ -516,9 +528,9 @@ export function AddProductScreen({
             <AppFieldMessage
               message={
                 didAttemptSubmit && hasValidationErrors
-                  ? `Please fix the highlighted fields before ${
-                      isEditMode ? 'saving' : 'creating'
-                    } this product.`
+                  ? isEditMode
+                    ? t('productReviewFixErrorsSave')
+                    : t('productReviewFixErrorsCreate')
                   : submitErrorMessage
               }
             />
@@ -529,31 +541,36 @@ export function AddProductScreen({
       <View style={styles.footerActions}>
         {currentStep > 0 ? (
           <AppButton
-            title="Previous"
+            title={t('commonPrevious')}
             onPress={() => setCurrentStep(current => Math.max(0, current - 1))}
             disabled={isSubmitting}
             style={styles.secondaryAction}
             textStyle={{ color: palette.accentStrong }}
+            leftIconName="back"
           />
         ) : (
           <View style={styles.actionSpacer} />
         )}
         {currentStep < steps.length - 1 ? (
           <AppButton
-            title="Next"
+            title={t('commonNext')}
             onPress={handleNextStep}
             disabled={isSubmitting}
             style={styles.primaryAction}
             textStyle={styles.primaryActionText}
+            rightIconName="chevron"
           />
         ) : (
           <AppButton
-            title={isEditMode ? 'Save product changes' : t('productAddSubmitButton')}
+            title={
+              isEditMode ? t('productSaveChangesButton') : t('productAddSubmitButton')
+            }
             onPress={handleSubmit}
             disabled={isSubmitting}
             loading={isSubmitting}
             style={styles.primaryAction}
             textStyle={styles.primaryActionText}
+            leftIconName={isEditMode ? 'save' : 'check'}
           />
         )}
       </View>

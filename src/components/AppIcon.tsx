@@ -9,10 +9,10 @@ const iconMap: Record<string, string> = {
   info: 'ℹ️',
   image: '🖼️',
   edit: '✎',
-  dashboard: '◫',
+  dashboard: '📊',
   vehicles: '🚚',
-  products: '🧴',
-  profile: '☻',
+  products: '🫗',
+  profile: '👤',
   language: '🌐',
   theme: '☼',
   package: '📦',
@@ -45,6 +45,10 @@ const iconMap: Record<string, string> = {
   route: '⌁',
   eye: '◉',
   eyeOff: '⊘',
+  save: '✓',
+  add: '+',
+  retry: '↻',
+  check: '✓',
 };
 
 export interface AppIconProps {

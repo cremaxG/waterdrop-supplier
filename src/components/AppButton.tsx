@@ -5,11 +5,13 @@ import {
   StyleProp,
   StyleSheet,
   Text,
+  View,
   TextStyle,
   ViewStyle,
 } from 'react-native';
 import { useAppPalette } from '../hooks/useAppPalette';
 import { useTranslation } from '../providers/AppProviders';
+import { AppIcon } from './AppIcon';
 import { AppWaterLoader } from './AppWaterLoader';
 
 type AppButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -21,6 +23,9 @@ export interface AppButtonProps extends PressableProps {
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
+  leftIconName?: string;
+  rightIconName?: string;
+  iconSize?: number;
 }
 
 export function AppButton({
@@ -32,6 +37,9 @@ export function AppButton({
   style,
   textStyle,
   disabled,
+  leftIconName,
+  rightIconName,
+  iconSize = 16,
   ...rest
 }: AppButtonProps) {
   const palette = useAppPalette();
@@ -92,15 +100,33 @@ export function AppButton({
           tone={isPrimary || isDanger ? 'light' : 'accent'}
         />
       ) : (
-        <Text
-          style={[
-            styles.text,
-            { color: disabled ? palette.muted : labelColor },
-            textStyle,
-          ]}
-        >
-          {label}
-        </Text>
+        <View style={styles.content}>
+          {leftIconName ? (
+            <AppIcon
+              name={leftIconName}
+              size={iconSize}
+              color={disabled ? palette.muted : labelColor}
+              style={styles.leftIcon}
+            />
+          ) : null}
+          <Text
+            style={[
+              styles.text,
+              { color: disabled ? palette.muted : labelColor },
+              textStyle,
+            ]}
+          >
+            {label}
+          </Text>
+          {rightIconName ? (
+            <AppIcon
+              name={rightIconName}
+              size={iconSize}
+              color={disabled ? palette.muted : labelColor}
+              style={styles.rightIcon}
+            />
+          ) : null}
+        </View>
       )}
     </Pressable>
   );
@@ -116,8 +142,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   text: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  leftIcon: {
+    marginRight: 8,
+  },
+  rightIcon: {
+    marginLeft: 8,
   },
 });

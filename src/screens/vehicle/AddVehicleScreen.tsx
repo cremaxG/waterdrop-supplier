@@ -74,33 +74,36 @@ function buildInitialDraft(
   };
 }
 
-function getVehicleValidationErrors(draft: NewVehicleDraft) {
+function getVehicleValidationErrors(
+  draft: NewVehicleDraft,
+  t: (key: string) => string,
+) {
   return {
     vehicleNumber: !draft.vehicleNumber.trim()
-      ? 'Vehicle registration number is required.'
+      ? t('vehicleValidationNumberRequired')
       : '',
     name: !draft.name.trim()
-      ? 'Vehicle name is required.'
+      ? t('vehicleValidationNameRequired')
       : draft.name.trim().length < 2
-        ? 'Enter at least 2 characters for the vehicle name.'
+        ? t('vehicleValidationNameMin')
         : '',
     driverName: !draft.driverName.trim()
-      ? 'Driver name is required.'
+      ? t('vehicleValidationDriverNameRequired')
       : draft.driverName.trim().length < 2
-        ? 'Enter a complete driver name.'
+        ? t('vehicleValidationDriverNameMin')
         : '',
     phone: !draft.phone.trim()
-      ? 'Driver phone number is required.'
+      ? t('vehicleValidationPhoneRequired')
       : draft.phone.replace(/\D/g, '').length !== 10
-        ? 'Enter a valid 10-digit phone number.'
+        ? t('vehicleValidationPhoneInvalid')
         : '',
     email:
       draft.email.trim() && !isEmail(draft.email)
-        ? 'Enter a valid email address or leave this field empty.'
+        ? t('vehicleValidationEmailInvalid')
         : '',
-    capacity: !draft.capacity.trim() ? 'Vehicle load capacity is required.' : '',
+    capacity: !draft.capacity.trim() ? t('vehicleValidationCapacityRequired') : '',
     driverLicenseNumber: !draft.driverLicenseNumber.trim()
-      ? 'Driver licence number is required.'
+      ? t('vehicleValidationLicenseRequired')
       : '',
   } satisfies Record<VehicleField, string>;
 }
@@ -137,29 +140,32 @@ export function AddVehicleScreen({
     () => [
       {
         key: 'vehicle',
-        label: 'Vehicle',
-        title: mode === 'edit' ? 'Vehicle information' : t('vehicleAddSectionVehicle'),
+        label: t('vehicleStepVehicle'),
+        title:
+          mode === 'edit'
+            ? t('vehicleEditSectionVehicleTitle')
+            : t('vehicleAddSectionVehicle'),
         subtitle:
           mode === 'edit'
-            ? 'Update the visible fleet identity for this vehicle.'
+            ? t('vehicleEditSectionVehicleSubtitle')
             : t('vehicleAddSectionVehicleSubtitle'),
         fields: ['vehicleNumber', 'name', 'capacity'],
       },
       {
         key: 'driver',
-        label: 'Driver',
-        title: 'Driver details',
+        label: t('vehicleStepDriver'),
+        title: t('vehicleEditDriverTitle'),
         subtitle:
-          'Keep the assigned driver details complete so the fleet card and edit view stay useful.',
+          t('vehicleEditDriverSubtitle'),
         fields: ['driverName', 'phone', 'email', 'driverLicenseNumber'],
       },
       {
         key: 'review',
-        label: 'Review',
+        label: t('vehicleStepReview'),
         title: t('vehicleAddReviewTitle'),
         subtitle:
           mode === 'edit'
-            ? 'Review the updated vehicle details before saving.'
+            ? t('vehicleEditReviewSubtitle')
             : t('vehicleAddReviewSubtitle'),
         fields: [],
       },
@@ -167,25 +173,28 @@ export function AddVehicleScreen({
     [mode, t],
   );
 
-  const validationErrors = useMemo(() => getVehicleValidationErrors(draft), [draft]);
+  const validationErrors = useMemo(
+    () => getVehicleValidationErrors(draft, t),
+    [draft, t],
+  );
   const hasValidationErrors = useMemo(
     () => Object.values(validationErrors).some(Boolean),
     [validationErrors],
   );
   const isEditMode = mode === 'edit';
-  const headerTitle = isEditMode ? 'Edit vehicle' : t('vehicleAddTitle');
+  const headerTitle = isEditMode ? t('vehicleEditTitle') : t('vehicleAddTitle');
   const headerSubtitle = isEditMode
-    ? 'Update fleet details, driver contact, and approval information in a cleaner step-by-step flow.'
+    ? t('vehicleEditSubtitle')
     : t('vehicleAddSubtitle');
   const reviewChipLabel = isEditMode
-    ? 'Fleet update'
+    ? t('vehicleEditChipLabel')
     : t('vehiclePendingReviewStatus');
   const supplierLocationLabel =
     supplierLocationSuggestion?.lat && supplierLocationSuggestion?.lng
       ? `${Number(supplierLocationSuggestion.lat).toFixed(5)}, ${Number(
           supplierLocationSuggestion.lng,
         ).toFixed(5)}`
-      : 'Supplier default location will be used when available.';
+      : t('vehicleSupplierDefaultLocationLabel');
 
   const updateField = (field: keyof NewVehicleDraft, value: string) => {
     setDraft(current => ({ ...current, [field]: value }));
@@ -410,7 +419,7 @@ export function AddVehicleScreen({
                   value={draft.capacity}
                   onChangeText={value => updateField('capacity', value)}
                   onBlur={() => markTouched('capacity')}
-                  placeholder="Vehicle load capacity"
+                  placeholder={t('vehicleCapacityPlaceholder')}
                   hasError={shouldShowFieldError('capacity')}
                 />
                 <AppFieldMessage
@@ -431,7 +440,7 @@ export function AddVehicleScreen({
               value={draft.driverName}
               onChangeText={value => updateField('driverName', value)}
               onBlur={() => markTouched('driverName')}
-              placeholder="Assigned driver name"
+              placeholder={t('vehicleDriverNamePlaceholder')}
               hasError={shouldShowFieldError('driverName')}
             />
             <AppFieldMessage
@@ -456,7 +465,7 @@ export function AddVehicleScreen({
               value={draft.email}
               onChangeText={value => updateField('email', value)}
               onBlur={() => markTouched('email')}
-              placeholder="Vehicle driver email (optional)"
+              placeholder={t('vehicleDriverEmailPlaceholder')}
               keyboardType="email-address"
               autoCapitalize="none"
               hasError={shouldShowFieldError('email')}
@@ -468,7 +477,7 @@ export function AddVehicleScreen({
               value={draft.driverLicenseNumber}
               onChangeText={value => updateField('driverLicenseNumber', value)}
               onBlur={() => markTouched('driverLicenseNumber')}
-              placeholder="Vehicle driver licence number"
+              placeholder={t('vehicleDriverLicensePlaceholder')}
               hasError={shouldShowFieldError('driverLicenseNumber')}
             />
             <AppFieldMessage
@@ -494,42 +503,43 @@ export function AddVehicleScreen({
             >
               <View style={styles.reviewRow}>
                 <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
-                  Vehicle
+                  {t('vehicleReviewVehicleLabel')}
                 </AppText>
                 <AppText style={[styles.reviewValue, { color: palette.text }]}>
-                  {draft.name || 'Not entered'}
+                  {draft.name || t('commonNotEntered')}
                 </AppText>
               </View>
               <View style={styles.reviewRow}>
                 <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
-                  Vehicle number
+                  {t('vehicleReviewVehicleNumberLabel')}
                 </AppText>
                 <AppText style={[styles.reviewValue, { color: palette.text }]}>
-                  {draft.vehicleNumber || 'Not entered'}
+                  {draft.vehicleNumber || t('commonNotEntered')}
                 </AppText>
               </View>
               <View style={styles.reviewRow}>
                 <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
-                  Capacity
+                  {t('vehicleReviewCapacityLabel')}
                 </AppText>
                 <AppText style={[styles.reviewValue, { color: palette.text }]}>
-                  {draft.capacity || 'Not entered'}
+                  {draft.capacity || t('commonNotEntered')}
                 </AppText>
               </View>
               <View style={styles.reviewRow}>
                 <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
-                  Driver
+                  {t('vehicleReviewDriverLabel')}
                 </AppText>
                 <AppText style={[styles.reviewValue, { color: palette.text }]}>
-                  {draft.driverName || 'Not entered'}
+                  {draft.driverName || t('commonNotEntered')}
                 </AppText>
               </View>
               <View style={styles.reviewRow}>
                 <AppText style={[styles.reviewLabel, { color: palette.muted }]}>
-                  Driver contact
+                  {t('vehicleReviewDriverContactLabel')}
                 </AppText>
                 <AppText style={[styles.reviewValue, { color: palette.text }]}>
-                  {[draft.phone, draft.email].filter(Boolean).join(' • ') || 'Not entered'}
+                  {[draft.phone, draft.email].filter(Boolean).join(' • ') ||
+                    t('commonNotEntered')}
                 </AppText>
               </View>
             </View>
@@ -544,14 +554,13 @@ export function AddVehicleScreen({
               ]}
             >
               <AppText style={[styles.locationSummaryLabel, { color: palette.accentStrong }]}>
-                Vehicle location
+                {t('vehicleLocationTitle')}
               </AppText>
               <AppText style={[styles.locationSummaryValue, { color: palette.text }]}>
-                Supplier default dispatch location
+                {t('vehicleLocationSupplierDefaultTitle')}
               </AppText>
               <AppText style={[styles.locationSummaryHint, { color: palette.muted }]}>
-                Vehicle-specific location capture is not needed right now. We will send the
-                supplier default location in the API request.
+                {t('vehicleLocationSupplierDefaultHint')}
               </AppText>
               <AppText style={[styles.locationCoordinates, { color: palette.accentStrong }]}>
                 {supplierLocationLabel}
@@ -560,14 +569,14 @@ export function AddVehicleScreen({
 
             <AppText style={[styles.noteText, { color: palette.muted }]}>
               {isEditMode
-                ? 'Save the updated fleet card details when everything looks right.'
+                ? t('vehicleEditReviewNote')
                 : t('vehicleAddReviewNote')}
             </AppText>
 
             <AppFieldMessage
               message={
                 didAttemptSubmit && hasValidationErrors
-                  ? 'Please fix the highlighted fields before continuing.'
+                  ? t('vehicleFormFixErrors')
                   : submitErrorMessage
               }
             />
@@ -578,11 +587,12 @@ export function AddVehicleScreen({
       <View style={styles.footerActions}>
         {currentStep > 0 ? (
           <AppButton
-            title="Previous"
+            title={t('commonPrevious')}
             onPress={() => setCurrentStep(current => Math.max(0, current - 1))}
             disabled={isSubmitting}
             style={styles.secondaryAction}
             textStyle={{ color: palette.accentStrong }}
+            leftIconName="back"
           />
         ) : (
           <View style={styles.actionSpacer} />
@@ -590,20 +600,24 @@ export function AddVehicleScreen({
 
         {currentStep < steps.length - 1 ? (
           <AppButton
-            title="Next"
+            title={t('commonNext')}
             onPress={handleNextStep}
             disabled={isSubmitting}
             style={styles.primaryAction}
             textStyle={styles.primaryActionText}
+            rightIconName="chevron"
           />
         ) : (
           <AppButton
-            title={isEditMode ? 'Save vehicle changes' : t('vehicleAddSubmitButton')}
+            title={
+              isEditMode ? t('vehicleSaveChangesButton') : t('vehicleAddSubmitButton')
+            }
             onPress={handleSubmit}
             disabled={isSubmitting}
             loading={isSubmitting}
             style={styles.primaryAction}
             textStyle={styles.primaryActionText}
+            leftIconName={isEditMode ? 'save' : 'check'}
           />
         )}
       </View>

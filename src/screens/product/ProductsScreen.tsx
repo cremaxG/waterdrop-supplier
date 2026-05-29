@@ -268,7 +268,7 @@ export function ProductsScreen({
       const supplier = unwrapSupplierProfile(supplierResponse) as { id?: number } | null;
 
       if (!supplier?.id) {
-        throw new Error('Unable to load supplier profile.');
+        throw new Error(t('supplierProfileLoadError'));
       }
 
       const payload = {
@@ -288,7 +288,7 @@ export function ProductsScreen({
       if (!response || (!response.id && !response.name)) {
         throw new Error(
           extractApiErrorMessage(createProductResponse) ??
-            'Unable to create product. Please try again.',
+            t('productCreateError'),
         );
       }
 
@@ -318,7 +318,7 @@ export function ProductsScreen({
       }
 
       closeProductForm(() => {
-        setSnackbarMessage(response.message ?? 'Product created successfully.');
+        setSnackbarMessage(response.message ?? t('productCreateSuccess'));
         setSnackbarTone('success');
         setSnackbarVisible(true);
       });
@@ -326,7 +326,7 @@ export function ProductsScreen({
       const nextMessage =
         extractApiErrorMessage(error) ??
         error?.message ??
-        'Unable to create product. Please try again.';
+        t('productCreateError');
       setProductSubmissionError(nextMessage);
       setSnackbarMessage(nextMessage);
       setSnackbarTone('error');
@@ -348,7 +348,7 @@ export function ProductsScreen({
       const supplierResponse = await SupplierApi.getSupplierProfile();
       const supplier = unwrapSupplierProfile(supplierResponse) as { id?: number } | null;
       if (!supplier?.id) {
-        throw new Error('Unable to load supplier profile.');
+        throw new Error(t('supplierProfileLoadError'));
       }
 
       const numericProductId = Number(editingProductId);
@@ -369,14 +369,14 @@ export function ProductsScreen({
       const response = await ProductApi.updateProduct(requestProductId, payload);
       if (hasApiFailure(response)) {
         throw new Error(
-          extractApiErrorMessage(response) ?? 'Unable to update product.',
+          extractApiErrorMessage(response) ?? t('productUpdateError'),
         );
       }
 
       await refreshProducts();
 
       closeProductForm(() => {
-        setSnackbarMessage('Product updated successfully.');
+        setSnackbarMessage(t('productUpdateSuccess'));
         setSnackbarTone('success');
         setSnackbarVisible(true);
       });
@@ -384,7 +384,7 @@ export function ProductsScreen({
       const nextMessage =
         extractApiErrorMessage(error) ??
         error?.message ??
-        'Unable to update product.';
+        t('productUpdateError');
       setProductSubmissionError(nextMessage);
       setSnackbarMessage(nextMessage);
       setSnackbarTone('error');
@@ -417,12 +417,12 @@ export function ProductsScreen({
       const response = await ProductApi.deleteProduct(requestProductId);
       if (hasApiFailure(response)) {
         throw new Error(
-          extractApiErrorMessage(response) ?? 'Unable to delete product.',
+          extractApiErrorMessage(response) ?? t('productDeleteError'),
         );
       }
       await refreshProducts();
       closeProductForm(() => {
-        setSnackbarMessage('Product deleted successfully.');
+        setSnackbarMessage(t('productDeleteSuccess'));
         setSnackbarTone('success');
         setSnackbarVisible(true);
       });
@@ -430,7 +430,7 @@ export function ProductsScreen({
       const nextMessage =
         extractApiErrorMessage(error) ??
         error?.message ??
-        'Unable to delete product.';
+        t('productDeleteError');
       setSnackbarMessage(nextMessage);
       setSnackbarTone('error');
       setSnackbarVisible(true);
@@ -470,7 +470,7 @@ export function ProductsScreen({
       const nextMessage =
         extractApiErrorMessage(error) ??
         error?.message ??
-        'Unable to update vehicle inventory. Please try again.';
+        t('productVehicleInventoryError');
       setSnackbarMessage(nextMessage);
       setSnackbarTone('error');
       setSnackbarVisible(true);
@@ -559,6 +559,7 @@ export function ProductsScreen({
                 variant="primary"
                 style={styles.addButton}
                 textStyle={styles.addButtonText}
+                leftIconName="add"
               />
             </View>
 
@@ -637,6 +638,7 @@ export function ProductsScreen({
                 variant="primary"
                 style={styles.emptyStateButton}
                 textStyle={styles.addButtonText}
+                leftIconName="add"
               />
             </View>
           ) : (
@@ -767,12 +769,12 @@ export function ProductsScreen({
 
       <AppSheet
         visible={isProductActionsVisible}
-        title="Product actions"
-        subtitle="Manage this product directly from the detail or edit flow."
+        title={t('productActionsSheetTitle')}
+        subtitle={t('productActionsSheetSubtitle')}
         onClose={() => setProductActionsVisible(false)}
       >
         <AppButton
-          title="Edit product"
+          title={t('productEditButton')}
           onPress={() => {
             if (!editingProductId) {
               return;
@@ -783,9 +785,10 @@ export function ProductsScreen({
           disabled={!editingProductId}
           style={styles.sheetActionButton}
           textStyle={styles.sheetActionText}
+          leftIconName="edit"
         />
         <AppButton
-          title="Delete product"
+          title={t('productDeleteButton')}
           variant="danger"
           onPress={() => {
             setProductActionsVisible(false);
@@ -794,29 +797,32 @@ export function ProductsScreen({
           disabled={!editingProductId || isSubmittingProduct}
           style={styles.sheetDeleteButton}
           textStyle={styles.sheetDeleteText}
+          leftIconName="trash"
         />
       </AppSheet>
 
       <AppSheet
         visible={isDeleteConfirmVisible}
-        title="Delete product?"
-        subtitle="This action removes the product from the supplier catalog. Please confirm before continuing."
+        title={t('productDeleteConfirmTitle')}
+        subtitle={t('productDeleteConfirmSubtitle')}
         onClose={() => setDeleteConfirmVisible(false)}
       >
         <AppButton
-          title="Keep product"
+          title={t('productKeepButton')}
           onPress={() => setDeleteConfirmVisible(false)}
           style={styles.sheetActionButton}
           textStyle={styles.sheetActionText}
+          leftIconName="back"
         />
         <AppButton
-          title="Delete permanently"
+          title={t('productDeletePermanentlyButton')}
           variant="danger"
           onPress={handleDeleteProduct}
           loading={isSubmittingProduct}
           disabled={!editingProductId}
           style={styles.sheetDeleteButton}
           textStyle={styles.sheetDeleteText}
+          leftIconName="trash"
         />
       </AppSheet>
 

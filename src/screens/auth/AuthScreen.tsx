@@ -2640,6 +2640,7 @@ export function AuthScreen({
                     disabled={isBusy}
                     style={styles.modalSecondaryButton}
                     textStyle={{ color: palette.accentStrong }}
+                    leftIconName="back"
                   />
                 ) : (
                   <View style={styles.modalFooterSpacer} />
@@ -2659,6 +2660,7 @@ export function AuthScreen({
                       },
                     ]}
                     textStyle={{ color: palette.accentTextOnFill }}
+                    rightIconName="chevron"
                   />
                 ) : (
                   <AppButton
@@ -2675,6 +2677,7 @@ export function AuthScreen({
                       },
                     ]}
                     textStyle={{ color: palette.accentTextOnFill }}
+                    leftIconName="check"
                   />
                 )}
               </View>
@@ -2883,6 +2886,7 @@ export function AuthScreen({
                 },
               ]}
               textStyle={{ color: palette.accentTextOnFill }}
+              leftIconName="location"
             />
           </View>
         </SafeAreaView>
@@ -3121,6 +3125,7 @@ export function AuthScreen({
                       },
                     ]}
                     textStyle={{ color: palette.accentTextOnFill }}
+                    rightIconName="chevron"
                   />
                 </>
               ) : null}
@@ -3185,6 +3190,7 @@ export function AuthScreen({
                       },
                     ]}
                     textStyle={{ color: palette.accentTextOnFill }}
+                    leftIconName="save"
                   />
                 </>
               ) : null}

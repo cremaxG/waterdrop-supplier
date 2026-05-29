@@ -264,8 +264,8 @@ export function VehicleDetailsScreen({
       </View>
 
       <VehicleSectionCard
-        title="Today's orders"
-        subtitle="Current dispatch snapshot and order activity for this vehicle."
+        title={t('vehicleDetailsTodayOrdersTitle')}
+        subtitle={t('vehicleDetailsTodayOrdersSubtitle')}
       >
         <View style={styles.infoStack}>
           <View
@@ -278,15 +278,15 @@ export function VehicleDetailsScreen({
             ]}
           >
             <AppText style={[styles.currentOrderTitle, { color: palette.text }]}>
-              {vehicle.currentOrder?.title || 'No active order assigned'}
+              {vehicle.currentOrder?.title || t('vehicleNoActiveOrderTitle')}
             </AppText>
             <AppText style={[styles.currentOrderSubtitle, { color: palette.muted }]}>
               {vehicle.currentOrder?.subtitle ||
-                'The latest available vehicle order will appear here once assigned.'}
+                t('vehicleNoActiveOrderSubtitle')}
             </AppText>
             <View style={styles.currentOrderMetaRow}>
               <AppText style={[styles.currentOrderMeta, { color: palette.accentStrong }]}>
-                {vehicle.currentOrder?.status || 'Awaiting assignment'}
+                {vehicle.currentOrder?.status || t('vehicleAwaitingAssignment')}
               </AppText>
               {vehicle.currentOrder?.value ? (
                 <AppText style={[styles.currentOrderMeta, { color: palette.text }]}>
@@ -298,7 +298,7 @@ export function VehicleDetailsScreen({
           <View style={styles.inlineDetailsRow}>
             <View style={styles.inlineDetailCell}>
               <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
-                Earnings today
+                {t('vehicleEarningsTodayLabel')}
               </AppText>
               <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
                 {vehicle.earningsToday}
@@ -323,14 +323,26 @@ export function VehicleDetailsScreen({
         <View style={styles.infoStack}>
           {[
             { label: t('vehicleDriverNameLabel'), value: vehicle.driverName },
-            { label: t('vehicleDriverPhoneLabel'), value: vehicle.driverPhone || '—' },
-            { label: 'Driver email', value: vehicle.driverEmail || '—' },
             {
-              label: 'Driver licence number',
-              value: vehicle.driverLicenseNumber || '—',
+              label: t('vehicleDriverPhoneLabel'),
+              value: vehicle.driverPhone || t('commonNotAvailable'),
             },
-            { label: t('vehicleDriverRatingLabel'), value: vehicle.driverRating || '—' },
-            { label: t('vehicleDriverShiftLabel'), value: vehicle.shiftWindow || '—' },
+            {
+              label: t('vehicleDriverEmailLabel'),
+              value: vehicle.driverEmail || t('commonNotAvailable'),
+            },
+            {
+              label: t('vehicleDriverLicenseLabel'),
+              value: vehicle.driverLicenseNumber || t('commonNotAvailable'),
+            },
+            {
+              label: t('vehicleDriverRatingLabel'),
+              value: vehicle.driverRating || t('commonNotAvailable'),
+            },
+            {
+              label: t('vehicleDriverShiftLabel'),
+              value: vehicle.shiftWindow || t('commonNotAvailable'),
+            },
           ].map(item => (
             <View
               key={item.label}
@@ -361,6 +373,7 @@ export function VehicleDetailsScreen({
               },
             ]}
             textStyle={[styles.secondaryButtonText, { color: palette.accentStrong }]}
+            leftIconName="phone"
           />
         </View>
       </VehicleSectionCard>
@@ -402,7 +415,7 @@ export function VehicleDetailsScreen({
                 {t('vehicleEtaToHubLabel')}
               </AppText>
               <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
-                {vehicle.etaToHub || '—'}
+                {vehicle.etaToHub || t('commonNotAvailable')}
               </AppText>
             </View>
           </View>
@@ -412,15 +425,15 @@ export function VehicleDetailsScreen({
                 {t('vehicleNextServiceLabel')}
               </AppText>
               <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
-                {vehicle.nextService || '—'}
+                {vehicle.nextService || t('commonNotAvailable')}
               </AppText>
             </View>
             <View style={styles.inlineDetailCell}>
               <AppText style={[styles.inlineDetailLabel, { color: palette.muted }]}>
-                Vehicle number
+                {t('vehicleVehicleNumberLabel')}
               </AppText>
               <AppText style={[styles.inlineDetailValue, { color: palette.text }]}>
-                {vehicle.vehicleNumber || '—'}
+                {vehicle.vehicleNumber || t('commonNotAvailable')}
               </AppText>
             </View>
           </View>
@@ -443,7 +456,7 @@ export function VehicleDetailsScreen({
             ))
           ) : (
             <AppText style={[styles.emptyText, { color: palette.muted }]}>
-              No products are assigned to this vehicle yet.
+              {t('vehicleNoProductsAssigned')}
             </AppText>
           )}
         </View>
@@ -456,7 +469,7 @@ export function VehicleDetailsScreen({
         <View style={styles.infoStack}>
           {onEdit ? (
             <AppButton
-              title="Edit vehicle"
+              title={t('vehicleEditButton')}
               onPress={onEdit}
               style={[
                 styles.secondaryButton,
@@ -466,6 +479,7 @@ export function VehicleDetailsScreen({
                 },
               ]}
               textStyle={[styles.secondaryButtonText, { color: palette.accentStrong }]}
+              leftIconName="edit"
             />
           ) : null}
           <AppButton
@@ -480,6 +494,7 @@ export function VehicleDetailsScreen({
             disabled={isPendingReview}
             style={vehicle.isOnline ? styles.offlineButton : styles.onlineButton}
             textStyle={styles.primaryButtonText}
+            leftIconName={vehicle.isOnline ? 'offline' : 'online'}
           />
           <AppButton
             title={t('vehicleViewHistoryButton')}
@@ -493,6 +508,7 @@ export function VehicleDetailsScreen({
               },
             ]}
             textStyle={[styles.secondaryButtonText, { color: palette.accentStrong }]}
+            leftIconName="history"
           />
         </View>
       </VehicleSectionCard>

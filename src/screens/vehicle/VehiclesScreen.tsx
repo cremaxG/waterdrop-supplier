@@ -642,7 +642,7 @@ export function VehiclesScreen({
       const profile = await ensureSupplierProfile();
 
       if (!profile?.id) {
-        throw new Error('Unable to load supplier profile.');
+        throw new Error(t('supplierProfileLoadError'));
       }
 
       const payload = {
@@ -667,7 +667,7 @@ export function VehiclesScreen({
       if (!response || (!response.id && !response.vehicle_number && !response.name)) {
         throw new Error(
           extractApiErrorMessage(createVehicleResponse) ??
-            'Unable to add vehicle. Please try again.',
+            t('vehicleAddErrorSnackbar'),
         );
       }
 
@@ -1017,6 +1017,7 @@ export function VehiclesScreen({
                 variant="primary"
                 style={styles.addButton}
                 textStyle={styles.addButtonText}
+                leftIconName="add"
               />
             </View>
 
@@ -1154,6 +1155,7 @@ export function VehiclesScreen({
                 variant="primary"
                 style={styles.emptyStateButton}
                 textStyle={styles.addButtonText}
+                leftIconName="add"
               />
             </View>
           ) : null}
@@ -1252,12 +1254,12 @@ export function VehiclesScreen({
 
       <AppSheet
         visible={isVehicleActionsVisible}
-        title="Vehicle actions"
-        subtitle="Manage this vehicle directly from the edit flow."
+        title={t('vehicleActionSheetTitle')}
+        subtitle={t('vehicleActionSheetSubtitle')}
         onClose={() => setVehicleActionsVisible(false)}
       >
         <AppButton
-          title="Edit vehicle"
+          title={t('vehicleEditButton')}
           onPress={() => {
             if (!editingVehicleId) {
               return;
@@ -1268,10 +1270,13 @@ export function VehiclesScreen({
           disabled={!editingVehicleId}
           style={styles.sheetActionButton}
           textStyle={styles.sheetActionText}
+          leftIconName="edit"
         />
         <AppButton
           title={
-            editingVehicle?.isOnline ? 'Mark as offline' : 'Mark as online'
+            editingVehicle?.isOnline
+              ? t('vehicleMarkOfflineAction')
+              : t('vehicleMarkOnlineAction')
           }
           onPress={() => {
             if (!editingVehicleId) {
@@ -1283,9 +1288,10 @@ export function VehiclesScreen({
           disabled={!editingVehicleId}
           style={styles.sheetActionButton}
           textStyle={styles.sheetActionText}
+          leftIconName={editingVehicle?.isOnline ? 'offline' : 'online'}
         />
         <AppButton
-          title="Delete vehicle"
+          title={t('vehicleDeleteActionTitle')}
           variant="danger"
           onPress={() => {
             setVehicleActionsVisible(false);
@@ -1294,29 +1300,32 @@ export function VehiclesScreen({
           disabled={!editingVehicleId || isSubmittingVehicle}
           style={styles.sheetDeleteButton}
           textStyle={styles.sheetDeleteText}
+          leftIconName="trash"
         />
       </AppSheet>
 
       <AppSheet
         visible={isDeleteConfirmVisible}
-        title="Delete vehicle?"
-        subtitle="This action removes the vehicle from your fleet list. Please confirm before continuing."
+        title={t('vehicleDeleteConfirmTitle')}
+        subtitle={t('vehicleDeleteConfirmSubtitle')}
         onClose={() => setDeleteConfirmVisible(false)}
       >
         <AppButton
-          title="Keep vehicle"
+          title={t('vehicleKeepAction')}
           onPress={() => setDeleteConfirmVisible(false)}
           style={styles.sheetActionButton}
           textStyle={styles.sheetActionText}
+          leftIconName="back"
         />
         <AppButton
-          title="Delete permanently"
+          title={t('vehicleDeletePermanentlyAction')}
           variant="danger"
           onPress={handleDeleteVehicle}
           loading={isSubmittingVehicle}
           disabled={!editingVehicleId}
           style={styles.sheetDeleteButton}
           textStyle={styles.sheetDeleteText}
+          leftIconName="trash"
         />
       </AppSheet>
 
